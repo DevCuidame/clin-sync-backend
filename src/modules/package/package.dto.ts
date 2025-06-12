@@ -7,6 +7,7 @@ export interface CreatePackageDto {
   discount_percentage?: number;
   is_active?: boolean;
   terms_conditions?: string;
+  image_url?: string;
 }
 
 export interface UpdatePackageDto {
@@ -18,6 +19,7 @@ export interface UpdatePackageDto {
   discount_percentage?: number;
   is_active?: boolean;
   terms_conditions?: string;
+  image_url?: string;
 }
 
 export interface PackageResponseDto {
@@ -30,6 +32,7 @@ export interface PackageResponseDto {
   discount_percentage?: number;
   is_active: boolean;
   terms_conditions?: string;
+  image_url?: string;
   created_at: Date;
   updated_at: Date;
 }

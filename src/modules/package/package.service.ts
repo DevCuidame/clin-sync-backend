@@ -19,7 +19,8 @@ export class PackageService {
       validity_days: packageData.validity_days,
       discount_percentage: packageData.discount_percentage,
       is_active: packageData.is_active ?? true,
-      terms_conditions: packageData.terms_conditions
+      terms_conditions: packageData.terms_conditions,
+      image_url: packageData.image_url
     });
 
     const savedPackage = await this.packageRepository.save(newPackage);
@@ -119,6 +120,7 @@ export class PackageService {
       discount_percentage: packageData.discount_percentage,
       is_active: packageData.is_active,
       terms_conditions: packageData.terms_conditions,
+      image_url: packageData.image_url,
       created_at: packageData.created_at,
       updated_at: packageData.updated_at
     };

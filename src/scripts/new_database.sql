@@ -113,6 +113,7 @@ CREATE TABLE packages (
     validity_days INT NOT NULL,
     discount_percentage DECIMAL(5, 2) DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
+    image_url VARCHAR(500) NULL,
     terms_conditions JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

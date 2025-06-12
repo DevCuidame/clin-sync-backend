@@ -80,26 +80,12 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
     throw new UnauthorizedError('Credenciales inválidas');
   }
 
-  // Si la verificación fue exitosa, verificar si necesitamos actualizar el hash
-  // if (PasswordService.needsUpgrade(user.password)) {
-  //   // Migrar la contraseña al nuevo formato de manera silenciosa
-  //   const newHash = PasswordService.hashPassword(password);
-  //   await this.userRepository.update(
-  //     user.id,
-  //     {
-  //       password: newHash,
-  //       updated_at: new Date(),
-  //     },
-  //     'Usuario'
-  //   );
-  // }
-
- 
-
-  let message = 'Sesión iniciada exitosamente';
+  // Verificar que el correo electrónico esté verificado
   if (!user.verified) {
-    message = 'emailnoverificado';
+    throw new UnauthorizedError('Debe verificar su correo electrónico antes de iniciar sesión');
   }
+
+  const message = 'Sesión iniciada exitosamente';
 
   // Generar token JWT
   const token = await this.generateToken(user);
