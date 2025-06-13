@@ -41,6 +41,23 @@ interface Config {
     password: string;
     from: string;
   };
+  wompi: {
+    publicKey: string;
+    privateKey: string;
+    eventsSecret: string;
+    environment: 'sandbox' | 'production';
+    baseUrl: string;
+  };
+  urls: {
+    frontend: string;
+    backend: string;
+  };
+  rateLimit: {
+    windowMs: number;
+    maxRequests: number;
+    paymentMax: number;
+    webhookMax: number;
+  };
   google?: {
     clientId: string;
     clientSecret: string;
@@ -85,6 +102,23 @@ const config: Config = {
     secure: process.env.EMAIL_SECURE === 'true',
     password: process.env.EMAIL_PASSWORD || 'PASSWORD',
     from: process.env.EMAIL_FROM || 'EMAIL',
+  },
+  wompi: {
+    publicKey: process.env.WOMPI_PUBLIC_KEY || '',
+    privateKey: process.env.WOMPI_PRIVATE_KEY || '',
+    eventsSecret: process.env.WOMPI_EVENTS_SECRET || '',
+    environment: (process.env.WOMPI_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox',
+    baseUrl: process.env.WOMPI_BASE_URL || 'https://sandbox.wompi.co/v1',
+  },
+  urls: {
+    frontend: process.env.FRONTEND_URL || 'http://localhost:3000',
+    backend: process.env.BACKEND_URL || 'http://localhost:3000',
+  },
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutos
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+    paymentMax: parseInt(process.env.RATE_LIMIT_PAYMENT_MAX || '10', 10),
+    webhookMax: parseInt(process.env.RATE_LIMIT_WEBHOOK_MAX || '50', 10),
   }
 };
 
@@ -107,6 +141,15 @@ if (config.env === 'production') {
   // Verificar la configuración de la base de datos
   if (config.database.password === 'postgres') {
     throw new Error('Se recomienda cambiar la contraseña por defecto de la base de datos en producción');
+  }
+  
+  // Verificar configuración de Wompi
+  if (!config.wompi.publicKey || !config.wompi.privateKey) {
+    throw new Error('Las credenciales de Wompi deben estar configuradas en producción');
+  }
+  
+  if (config.wompi.environment !== 'production') {
+    console.warn('⚠️  Advertencia: Wompi está configurado en modo test en producción');
   }
 }
 

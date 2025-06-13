@@ -16,6 +16,7 @@ router.put('/:id', purchaseController.updatePurchase);
 
 // User-specific purchase routes
 router.get('/user/:userId', purchaseController.getUserPurchases);
+router.get('/user/:userId/active', purchaseController.getActivePurchases);
 
 // Payment status update route
 router.patch('/:id/payment-status', purchaseController.updatePaymentStatus);

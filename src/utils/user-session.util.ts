@@ -1,6 +1,6 @@
 import { UserSessionService } from '../modules/user-session/user-session.service';
 import { UserSessionStatus } from '../models/user-session.model';
-import { logger } from './logger';
+import logger from './logger';
 
 /**
  * Utilidades para el manejo de sesiones de usuario

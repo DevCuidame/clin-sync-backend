@@ -9,6 +9,11 @@
         "build": "tsc",
         "lint": "eslint . --ext .ts",
         "test": "jest --coverage",
+        "test:payments": "npx ts-node src/tests/run-payment-tests.ts",
+        "test:payments:all": "npx ts-node src/tests/run-payment-tests.ts all",
+        "test:payments:flow": "npx ts-node src/tests/run-payment-tests.ts flow",
+        "test:payments:auth": "npx ts-node src/tests/run-payment-tests.ts auth",
+        "test:payments:full": "npx ts-node src/tests/test-payment-system.ts",
         "typeorm": "typeorm-ts-node-commonjs"
     },
     "keywords": [
@@ -23,9 +28,11 @@
         "class-transformer": "^0.5.1",
         "class-validator": "^0.14.1",
         "cors": "^2.8.5",
+        "crypto": "^1.0.1",
         "date-fns": "^4.1.0",
         "dotenv": "^16.4.5",
         "express": "^4.19.2",
+        "express-validator": "^7.0.1",
         "express-ws": "^5.0.2",
         "google-auth-library": "^9.15.1",
         "googleapis": "^144.0.0",
@@ -45,6 +52,7 @@
     "devDependencies": {
         "@types/cors": "^2.8.17",
         "@types/express": "^4.17.21",
+        "@types/express-validator": "^3.0.2",
         "@types/express-ws": "^3.0.5",
         "@types/jest": "^29.5.12",
         "@types/jsonwebtoken": "^9.0.6",

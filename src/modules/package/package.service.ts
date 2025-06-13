@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import { AppDataSource } from '../../core/config/database';
 import { Package } from '../../models/package.model';
+import { Purchase } from '../../models/purchase.model';
 import { CreatePackageDto, UpdatePackageDto, PackageResponseDto } from './package.dto';
 
 export class PackageService {
@@ -107,6 +108,29 @@ export class PackageService {
       .getMany();
 
     return packages.map(pkg => this.mapToResponseDto(pkg));
+  }
+
+  async getUserPackages(userId: number): Promise<any[]> {
+    const purchaseRepository = AppDataSource.getRepository(Purchase);
+    
+    const userPurchases = await purchaseRepository
+      .createQueryBuilder('purchase')
+      .leftJoinAndSelect('purchase.package', 'package')
+      .where('purchase.user_id = :userId', { userId })
+      .andWhere('purchase.payment_status = :status', { status: 'completed' })
+      .orderBy('purchase.purchase_date', 'DESC')
+      .getMany();
+
+    return userPurchases.map(purchase => ({
+      purchase_id: purchase.purchase_id,
+      amount_paid: purchase.amount_paid,
+      payment_status: purchase.payment_status,
+      payment_method: purchase.payment_method,
+      transaction_id: purchase.transaction_id,
+      purchase_date: purchase.purchase_date,
+      expires_at: purchase.expires_at,
+      package: this.mapToResponseDto(purchase.package)
+    }));
   }
 
   private mapToResponseDto(packageData: Package): PackageResponseDto {

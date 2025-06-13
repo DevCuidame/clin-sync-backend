@@ -16,6 +16,7 @@ server.on('upgrade', (request, socket, head) => {
   logger.debug(`🔄 Upgrade request for: ${pathname}`);
 });
 
+
 // Iniciar servidor
 server.listen(PORT, () => {
   logger.info(`🚀 Servidor ejecutándose en http://${HOST}:${PORT}`);

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pago No Procesado - {{companyName}}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #275289;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #35B6D9 0%, #275289 100%);
+      min-height: 100vh;
+    }
+    
+    .email-container {
+      background-color: #FFF;
+      border-radius: 15px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      margin: 20px 0;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+      text-align: center;
+      padding: 40px 20px;
+      color: #FFF;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .error-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 15px;
+      background: #FFF;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      color: #dc3545;
+    }
+    
+    .content {
+      padding: 40px 30px;
+    }
+    
+    .transaction-details {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 25px;
+      margin: 25px 0;
+      border-left: 4px solid #dc3545;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+    
+    .detail-label {
+      font-weight: 600;
+      color: #495057;
+    }
+    
+    .detail-value {
+      color: #275289;
+      font-weight: 500;
+    }
+    
+    .amount {
+      font-size: 24px;
+      font-weight: 700;
+      color: #dc3545;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #dc3545;
+      color: #FFF;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .message {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+      color: #721c24;
+    }
+    
+    .solutions {
+      background: #e2e3e5;
+      border: 1px solid #d6d8db;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+    }
+    
+    .solutions h4 {
+      margin-top: 0;
+      color: #275289;
+    }
+    
+    .solutions ul {
+      margin-bottom: 0;
+    }
+    
+    .solutions li {
+      margin-bottom: 8px;
+    }
+    
+    .footer {
+      background: #f8f9fa;
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e9ecef;
+    }
+    
+    .support-info {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e9ecef;
+      font-size: 14px;
+      color: #6c757d;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #35B6D9 0%, #275289 100%);
+      color: #FFF;
+      text-decoration: none;
+      border-radius: 25px;
+      font-weight: 600;
+      margin: 20px 10px;
+      transition: transform 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    .btn-retry {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    }
+    
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      
+      .content {
+        padding: 20px 15px;
+      }
+      
+      .transaction-details {
+        padding: 15px;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        gap: 5px;
+      }
+      
+      .btn {
+        display: block;
+        margin: 10px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <div class="error-icon">✗</div>
+      <h1>Pago No Procesado</h1>
+      <p>Hubo un problema con tu transacción</p>
+    </div>
+    
+    <div class="content">
+      <h2>Hola {{customerName}},</h2>
+      
+      <div class="message">
+        <strong>Lo sentimos.</strong> Tu pago no pudo ser procesado en este momento. No te preocupes, no se realizó ningún cargo a tu método de pago.
+      </div>
+      
+      <div class="transaction-details">
+        <h3 style="margin-top: 0; color: #275289;">Detalles del Intento de Pago</h3>
+        
+        <div class="detail-row">
+          <span class="detail-label">ID de Transacción:</span>
+          <span class="detail-value">{{transactionId}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Referencia:</span>
+          <span class="detail-value">{{reference}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Monto:</span>
+          <span class="detail-value amount">{{formattedAmount}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Estado:</span>
+          <span class="status">{{statusText}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Fecha y Hora:</span>
+          <span class="detail-value">{{formattedDate}}</span>
+        </div>
+        
+        {{#if paymentMethod}}
+        <div class="detail-row">
+          <span class="detail-label">Método de Pago:</span>
+          <span class="detail-value">{{paymentMethod}}</span>
+        </div>
+        {{/if}}
+        
+        {{#if packageName}}
+        <div class="detail-row">
+          <span class="detail-label">Servicio:</span>
+          <span class="detail-value">{{packageName}}</span>
+        </div>
+        {{/if}}
+      </div>
+      
+      <div class="solutions">
+        <h4>¿Qué puedes hacer?</h4>
+        <ul>
+          <li><strong>Verificar los datos:</strong> Asegúrate de que la información de tu tarjeta sea correcta</li>
+          <li><strong>Fondos suficientes:</strong> Confirma que tengas saldo disponible en tu cuenta</li>
+          <li><strong>Límites de transacción:</strong> Verifica que no hayas excedido los límites diarios</li>
+          <li><strong>Intentar otro método:</strong> Prueba con una tarjeta diferente o método de pago alternativo</li>
+          <li><strong>Contactar tu banco:</strong> Tu entidad financiera puede tener restricciones temporales</li>
+        </ul>
+      </div>
+      
+      <p><strong>¿Quieres intentar de nuevo?</strong></p>
+      <p>Puedes realizar un nuevo intento de pago cuando estés listo. El proceso es rápido y seguro.</p>
+      
+      <div style="text-align: center;">
+        <a href="#" class="btn btn-retry">Intentar Nuevamente</a>
+        <a href="#" class="btn">Contactar Soporte</a>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p><strong>{{companyName}}</strong></p>
+      <p>Estamos aquí para ayudarte</p>
+      
+      <div class="support-info">
+        <p><strong>¿Necesitas ayuda?</strong></p>
+        <p>Contáctanos en: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
+        <p>Teléfono: {{supportPhone}}</p>
+        <p><small>Nuestro equipo de soporte está disponible para asistirte con cualquier problema de pago.</small></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

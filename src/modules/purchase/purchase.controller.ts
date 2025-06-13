@@ -145,4 +145,23 @@ export class PurchaseController {
       });
     }
   };
+
+  getActivePurchases = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const activePurchases = await this.purchaseService.getActivePurchases(parseInt(userId));
+      
+      res.status(200).json({
+        success: true,
+        message: 'Active purchases retrieved successfully',
+        data: activePurchases
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving active purchases',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
 }

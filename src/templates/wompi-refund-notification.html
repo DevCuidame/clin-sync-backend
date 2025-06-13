@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reembolso Procesado - {{companyName}}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #275289;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #35B6D9 0%, #275289 100%);
+      min-height: 100vh;
+    }
+    
+    .email-container {
+      background-color: #FFF;
+      border-radius: 15px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      margin: 20px 0;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+      text-align: center;
+      padding: 40px 20px;
+      color: #FFF;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .refund-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 15px;
+      background: #FFF;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      color: #17a2b8;
+    }
+    
+    .content {
+      padding: 40px 30px;
+    }
+    
+    .transaction-details {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 25px;
+      margin: 25px 0;
+      border-left: 4px solid #17a2b8;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+    
+    .detail-label {
+      font-weight: 600;
+      color: #495057;
+    }
+    
+    .detail-value {
+      color: #275289;
+      font-weight: 500;
+    }
+    
+    .amount {
+      font-size: 24px;
+      font-weight: 700;
+      color: #17a2b8;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #17a2b8;
+      color: #FFF;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .message {
+      background: #d1ecf1;
+      border: 1px solid #bee5eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+      color: #0c5460;
+    }
+    
+    .refund-info {
+      background: #e8f4fd;
+      border: 1px solid #b8daff;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+    }
+    
+    .refund-info h4 {
+      margin-top: 0;
+      color: #275289;
+    }
+    
+    .refund-timeline {
+      background: #FFF;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 25px 0;
+    }
+    
+    .timeline-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 15px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      border-left: 3px solid #17a2b8;
+    }
+    
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .timeline-icon {
+      width: 32px;
+      height: 32px;
+      background: #17a2b8;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFF;
+      font-size: 16px;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+    
+    .timeline-content {
+      flex: 1;
+    }
+    
+    .timeline-title {
+      font-weight: 600;
+      color: #275289;
+      margin-bottom: 5px;
+    }
+    
+    .timeline-desc {
+      font-size: 14px;
+      color: #6c757d;
+      line-height: 1.4;
+    }
+    
+    .footer {
+      background: #f8f9fa;
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e9ecef;
+    }
+    
+    .support-info {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e9ecef;
+      font-size: 14px;
+      color: #6c757d;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #35B6D9 0%, #275289 100%);
+      color: #FFF;
+      text-decoration: none;
+      border-radius: 25px;
+      font-weight: 600;
+      margin: 20px 10px;
+      transition: transform 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    .highlight-box {
+      background: linear-gradient(135deg, #e8f4fd 0%, #d1ecf1 100%);
+      border: 2px solid #17a2b8;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 25px 0;
+      text-align: center;
+    }
+    
+    .highlight-amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: #17a2b8;
+      margin: 10px 0;
+    }
+    
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      
+      .content {
+        padding: 20px 15px;
+      }
+      
+      .transaction-details {
+        padding: 15px;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        gap: 5px;
+      }
+      
+      .btn {
+        display: block;
+        margin: 10px 0;
+      }
+      
+      .highlight-amount {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <div class="refund-icon">↩</div>
+      <h1>Reembolso Procesado</h1>
+      <p>Tu dinero ha sido devuelto exitosamente</p>
+    </div>
+    
+    <div class="content">
+      <h2>Hola {{customerName}},</h2>
+      
+      <div class="message">
+        <strong>¡Tu reembolso ha sido procesado!</strong> Hemos devuelto el dinero a tu método de pago original. Los fondos aparecerán en tu cuenta según los tiempos de tu entidad financiera.
+      </div>
+      
+      <div class="highlight-box">
+        <h3 style="margin-top: 0;">Monto Reembolsado</h3>
+        <div class="highlight-amount">{{formattedRefundAmount}}</div>
+        <p style="margin-bottom: 0;">{{refundReason}}</p>
+      </div>
+      
+      <div class="transaction-details">
+        <h3 style="margin-top: 0; color: #275289;">Detalles del Reembolso</h3>
+        
+        <div class="detail-row">
+          <span class="detail-label">ID de Transacción Original:</span>
+          <span class="detail-value">{{transactionId}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Referencia:</span>
+          <span class="detail-value">{{reference}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Monto Original:</span>
+          <span class="detail-value">{{formattedAmount}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Monto Reembolsado:</span>
+          <span class="detail-value amount">{{formattedRefundAmount}}</span>
+        </div>
+        
+        <div class="detail-row">
+          <span class="detail-label">Fecha del Reembolso:</span>
+          <span class="detail-value">{{formattedDate}}</span>
+        </div>
+        
+        {{#if paymentMethod}}
+        <div class="detail-row">
+          <span class="detail-label">Método de Pago:</span>
+          <span class="detail-value">{{paymentMethod}}</span>
+        </div>
+        {{/if}}
+        
+        {{#if packageName}}
+        <div class="detail-row">
+          <span class="detail-label">Servicio:</span>
+          <span class="detail-value">{{packageName}}</span>
+        </div>
+        {{/if}}
+        
+        <div class="detail-row">
+          <span class="detail-label">Motivo:</span>
+          <span class="detail-value">{{refundReason}}</span>
+        </div>
+      </div>
+      
+      <div class="refund-timeline">
+        <h4>Tiempos de Acreditación</h4>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon">💳</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Tarjetas de Crédito</div>
+            <div class="timeline-desc">1-2 ciclos de facturación (30-60 días hábiles)</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon">🏦</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Tarjetas de Débito</div>
+            <div class="timeline-desc">3-5 días hábiles</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon">📱</div>
+          <div class="timeline-content">
+            <div class="timeline-title">Billeteras Digitales (Nequi, etc.)</div>
+            <div class="timeline-desc">1-3 días hábiles</div>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon">🏛️</div>
+          <div class="timeline-content">
+            <div class="timeline-title">PSE (Transferencias)</div>
+            <div class="timeline-desc">1-2 días hábiles</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="refund-info">
+        <h4>Información Importante</h4>
+        <ul>
+          <li><strong>Verificación:</strong> El reembolso aparecerá en el mismo método de pago utilizado originalmente</li>
+          <li><strong>Notificación:</strong> Tu banco o entidad financiera te notificará cuando los fondos estén disponibles</li>
+          <li><strong>Estado de cuenta:</strong> Podrás ver el reembolso en tu próximo estado de cuenta</li>
+          <li><strong>Seguimiento:</strong> Guarda este correo como comprobante del reembolso procesado</li>
+        </ul>
+      </div>
+      
+      <p><strong>¿No ves el reembolso en el tiempo esperado?</strong></p>
+      <p>Si después del tiempo estimado no has recibido el reembolso, contáctanos con el ID de transacción y te ayudaremos a hacer seguimiento con tu entidad financiera.</p>
+      
+      <div style="text-align: center;">
+        <a href="#" class="btn">Contactar Soporte</a>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p><strong>{{companyName}}</strong></p>
+      <p>Gracias por tu comprensión</p>
+      
+      <div class="support-info">
+        <p><strong>¿Necesitas ayuda?</strong></p>
+        <p>Contáctanos en: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p>
+        <p>Teléfono: {{supportPhone}}</p>
+        <p><small>Nuestro equipo está disponible para ayudarte con cualquier consulta sobre tu reembolso.</small></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

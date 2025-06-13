@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { User } from '../../models/user.model';

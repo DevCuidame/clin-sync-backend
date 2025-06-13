@@ -10,7 +10,6 @@ import { BadRequestError } from '../utils/error-handler';
  */
 export const validateDto = (dto: any, source: 'body' | 'query' | 'params' = 'body') => {
   return async (req: Request, res: Response, next: NextFunction) => {
-    // Convertir objetos planos a la instancia de clase DTO
 
     const dtoObj = plainToInstance(dto, req[source]);
     

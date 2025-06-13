@@ -22,21 +22,102 @@ export class ProfessionalService {
   async getAllProfessionals(): Promise<Professional[]> {
     return await this.professionalRepository.find({
       relations: ['user'],
-      where: { status: ProfessionalStatus.ACTIVE }
+      where: { status: ProfessionalStatus.ACTIVE },
+      select: {
+        professional_id: true,
+        user_id: true,
+        license_number: true,
+        specialization: true,
+        bio: true,
+        hourly_rate: true,
+        experience_years: true,
+        status: true,
+        availability_config: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          phone: true,
+          birth_date: true,
+          gender: true,
+          address: true,
+          status: true,
+          path: true,
+          created_at: true,
+          updated_at: true
+        }
+      }
     });
   }
 
   async getProfessionalById(id: number): Promise<Professional | null> {
     return await this.professionalRepository.findOne({
       where: { professional_id: id },
-      relations: ['user']
+      relations: ['user'],
+      select: {
+        professional_id: true,
+        user_id: true,
+        license_number: true,
+        specialization: true,
+        bio: true,
+        hourly_rate: true,
+        experience_years: true,
+        status: true,
+        availability_config: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          phone: true,
+          birth_date: true,
+          gender: true,
+          address: true,
+          status: true,
+          path: true,
+          created_at: true,
+          updated_at: true
+        }
+      }
     });
   }
 
   async getProfessionalByUserId(userId: number): Promise<Professional | null> {
     return await this.professionalRepository.findOne({
       where: { user_id: userId },
-      relations: ['user']
+      relations: ['user'],
+      select: {
+        professional_id: true,
+        user_id: true,
+        license_number: true,
+        specialization: true,
+        bio: true,
+        hourly_rate: true,
+        experience_years: true,
+        status: true,
+        availability_config: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          phone: true,
+          birth_date: true,
+          gender: true,
+          address: true,
+          status: true,
+          path: true,
+          created_at: true,
+          updated_at: true
+        }
+      }
     });
   }
 
@@ -69,7 +150,34 @@ export class ProfessionalService {
         specialization,
         status: ProfessionalStatus.ACTIVE 
       },
-      relations: ['user']
+      relations: ['user'],
+      select: {
+        professional_id: true,
+        user_id: true,
+        license_number: true,
+        specialization: true,
+        bio: true,
+        hourly_rate: true,
+        experience_years: true,
+        status: true,
+        availability_config: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          phone: true,
+          birth_date: true,
+          gender: true,
+          address: true,
+          status: true,
+          path: true,
+          created_at: true,
+          updated_at: true
+        }
+      }
     });
   }
 }
