@@ -77,6 +77,10 @@ export class CreateUserDto {
 
 export class UpdateUserDto {
   @IsOptional()
+  @IsNumber({},{ message: 'El id debe de ser un número' })
+  id?: number;
+
+  @IsOptional()
   @IsString({ message: 'El nombre debe ser una cadena de texto' })
   first_name?: string;
 
