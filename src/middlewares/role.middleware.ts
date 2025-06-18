@@ -26,7 +26,7 @@ export interface AuthenticatedRequest extends Request {
 export enum SystemRoles {
   ADMIN = 'admin',
   PROFESSIONAL = 'professional',
-  CLIENT = 'client',
+  USER = 'usuario',
   MODERATOR = 'moderator'
 }
 
@@ -174,7 +174,7 @@ export const requireProfessional = requireRole(SystemRoles.PROFESSIONAL);
 /**
  * Middleware para verificar si el usuario es cliente
  */
-export const requireClient = requireRole(SystemRoles.CLIENT);
+export const requireClient = requireRole(SystemRoles.USER);
 
 /**
  * Middleware para verificar si el usuario es admin o profesional
@@ -355,7 +355,7 @@ export function requirePermission(permission: string) {
       // Aquí se podría implementar un sistema más granular de permisos
       // Por ahora, mapear permisos a roles
       const permissionRoleMap: Record<string, string[]> = {
-        'payments.create': [SystemRoles.ADMIN, SystemRoles.PROFESSIONAL, SystemRoles.CLIENT],
+        'payments.create': [SystemRoles.ADMIN, SystemRoles.PROFESSIONAL, SystemRoles.USER],
         'payments.refund': [SystemRoles.ADMIN, SystemRoles.PROFESSIONAL],
         'payments.view_all': [SystemRoles.ADMIN],
         'users.manage': [SystemRoles.ADMIN],

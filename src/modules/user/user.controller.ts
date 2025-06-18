@@ -342,4 +342,64 @@ export class UserController {
       next(error);
     }
   };
+
+  /**
+   * Obtener información completa del usuario autenticado
+   * @route GET /api/users/complete-info
+   */
+  getUserCompleteInfo = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        throw new BadRequestError('Usuario no autenticado');
+      }
+
+      const userCompleteInfo = await this.userService.getUserCompleteInfo(userId);
+
+      const response: ApiResponse = {
+        success: true,
+        data: userCompleteInfo,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Obtener información completa de cualquier usuario (solo admin)
+   * @route GET /api/users/:id/complete-info
+   */
+  getUserCompleteInfoById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const userId = parseInt(req.params.id);
+
+      if (!userId || isNaN(userId)) {
+        throw new BadRequestError('ID de usuario inválido');
+      }
+
+      const userCompleteInfo = await this.userService.getUserCompleteInfo(userId);
+
+      const response: ApiResponse = {
+        success: true,
+        data: userCompleteInfo,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
 }

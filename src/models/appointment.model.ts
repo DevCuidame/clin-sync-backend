@@ -3,6 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { User } from './user.model';
 import { Professional } from './professional.model';
 import { Service } from './service.model';
+import { UserSession } from './user-session.model';
 
 export enum AppointmentStatus {
   SCHEDULED = 'scheduled',
@@ -64,5 +65,21 @@ export class Appointment {
 
   @UpdateDateColumn()
   updated_at?: Date;
-  
+
+  // Relaciones
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
+
+  @ManyToOne(() => Professional)
+  @JoinColumn({ name: 'professional_id' })
+  professional!: Professional;
+
+  @ManyToOne(() => Service)
+  @JoinColumn({ name: 'service_id' })
+  service!: Service;
+
+  @ManyToOne(() => UserSession)
+  @JoinColumn({ name: 'user_session_id' })
+  user_session!: UserSession;
 }

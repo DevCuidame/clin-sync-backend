@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { UserController } from './user.controller';
-import { authMiddleware, restrictTo } from '../../middlewares/auth.middleware';
+import { authMiddleware } from '../../middlewares/auth.middleware';
 import { validateDto } from '../../middlewares/validator.middleware';
 import { UpdatePasswordDto, UpdateUserDto } from './user.dto';
+import { restrictTo } from '../../middlewares/role.middleware';
 
 const router = Router();
 const userController = new UserController();
@@ -57,7 +58,7 @@ router.delete('/account', userController.deleteAccount);
 /**
  * Routes that require admin role
  */
-router.use(restrictTo('admin'));
+router.use(restrictTo(['admin']));
 
 /**
  * @route GET /api/users
@@ -86,5 +87,11 @@ router.post('/:id/roles/:roleId', userController.assignRole);
  * @access Private (Admin only)
  */
 router.delete('/:id/roles/:roleId', userController.removeRole);
+
+// Información completa del usuario autenticado
+router.get('/complete-info', authMiddleware, userController.getUserCompleteInfo);
+
+// Información completa de cualquier usuario (solo admin)
+router.get('/:id/complete-info', authMiddleware, restrictTo(['admin']), userController.getUserCompleteInfoById);
 
 export default router;

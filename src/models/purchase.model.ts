@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { User } from './user.model';
 import { Package } from './package.model';
+import { PaymentTransaction } from './payment-transaction.model';
 
 export enum PaymentStatus {
   PENDING = 'pending',
@@ -54,4 +55,7 @@ export class Purchase {
   @ManyToOne(() => Package)
   @JoinColumn({ name: 'package_id' })
   package!: Package;
+
+  @OneToMany(() => PaymentTransaction, paymentTransaction => paymentTransaction.purchase)
+  payment_transactions!: PaymentTransaction[];
 }

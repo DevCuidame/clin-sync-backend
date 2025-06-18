@@ -20,40 +20,58 @@ export class ServiceService {
     return await this.serviceRepository.save(service);
   }
 
-  async getAllServices(filters?: ServiceFilters): Promise<Service[]> {
+  async getServices(filters?: ServiceFilters): Promise<Service[]> {
     const queryBuilder = this.serviceRepository.createQueryBuilder('service');
-    
+
     if (filters?.category) {
-      queryBuilder.andWhere('service.category = :category', { category: filters.category });
+      queryBuilder.andWhere('service.category = :category', {
+        category: filters.category,
+      });
     }
-    
+
     if (filters?.is_active !== undefined) {
-      queryBuilder.andWhere('service.is_active = :is_active', { is_active: filters.is_active });
+      queryBuilder.andWhere('service.is_active = :is_active', {
+        is_active: filters.is_active,
+      });
     }
-    
+
     return await queryBuilder.getMany();
+  }
+
+  async getAllServices(): Promise<Service[]> {
+    try {
+      const queryBuilder = this.serviceRepository.createQueryBuilder('service');
+      const result = await queryBuilder.getMany();
+      return result;
+    } catch (error) {
+      console.error('❌ Error en getAllServices:', error);
+      throw error;
+    }
   }
 
   async getServiceById(id: number): Promise<Service | null> {
     return await this.serviceRepository.findOne({
-      where: { service_id: id }
+      where: { service_id: id },
     });
   }
 
-  async updateService(id: number, updateData: UpdateServiceDto): Promise<Service> {
+  async updateService(
+    id: number,
+    updateData: UpdateServiceDto
+  ): Promise<Service> {
     await this.serviceRepository.update(id, updateData);
     const updatedService = await this.getServiceById(id);
-    
+
     if (!updatedService) {
       throw new Error('Service not found after update');
     }
-    
+
     return updatedService;
   }
 
   async deleteService(id: number): Promise<void> {
     const result = await this.serviceRepository.delete(id);
-    
+
     if (result.affected === 0) {
       throw new Error('Service not found');
     }
@@ -61,20 +79,20 @@ export class ServiceService {
 
   async getServicesByCategory(category: ServiceCategory): Promise<Service[]> {
     return await this.serviceRepository.find({
-      where: { 
+      where: {
         category,
-        is_active: true 
-      }
+        is_active: true,
+      },
     });
   }
 
   async toggleServiceStatus(id: number): Promise<Service> {
     const service = await this.getServiceById(id);
-    
+
     if (!service) {
       throw new Error('Service not found');
     }
-    
+
     return await this.updateService(id, { is_active: !service.is_active });
   }
 }

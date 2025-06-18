@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Purchase } from './purchase.model';
 import { Service } from './service.model';
+import { Appointment } from './appointment.model';
 
 export enum UserSessionStatus {
   ACTIVE = 'active',
@@ -47,4 +48,7 @@ export class UserSession {
   @ManyToOne(() => Service, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'service_id' })
   service!: Service;
+
+  @OneToMany(() => Appointment, appointment => appointment.user_session)
+  appointments!: Appointment[];
 }

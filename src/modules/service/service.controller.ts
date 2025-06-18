@@ -30,10 +30,26 @@ export class ServiceController {
   async getServices(req: Request, res: Response): Promise<void> {
     try {
       const { category, is_active } = req.query;
-      const services = await this.serviceService.getAllServices({
+      const services = await this.serviceService.getServices({
         category: category as string,
         is_active: is_active === 'true'
       });
+      res.status(200).json({
+        success: true,
+        data: services
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching services',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  async getAllServices(req: Request, res: Response): Promise<void> {
+    try {
+      const services = await this.serviceService.getAllServices();
       res.status(200).json({
         success: true,
         data: services
