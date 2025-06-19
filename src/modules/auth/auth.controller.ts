@@ -38,6 +38,7 @@ export class AuthController {
    */
   refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      console.log("🚀 ~ AuthController ~ refreshToken ~ req.body:", req.body)
       const { refresh_token } = req.body;
       
       if (!refresh_token) {

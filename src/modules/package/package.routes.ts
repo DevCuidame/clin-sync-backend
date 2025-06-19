@@ -7,12 +7,12 @@ const packageController = new PackageController();
 
 // Public routes
 router.get('/', packageController.getPackages);
+router.get('/user/packages', authMiddleware, packageController.getUserPackages);
 router.get('/:id', packageController.getPackageById);
 
 // Protected routes (require authentication)
 router.use(restrictTo('admin'));
 router.get('/', packageController.getPackages);
-router.get('/user/packages', authMiddleware, packageController.getUserPackages);
 router.post('/', authMiddleware, packageController.createPackage);
 router.put('/:id', authMiddleware, packageController.updatePackage);
 router.delete('/:id', authMiddleware, packageController.deletePackage);
