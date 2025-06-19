@@ -30,11 +30,12 @@ export const setupExpress = (existingApp?: Application): Application => {
   }
 
   // Configurar carpetas estáticas según configuración
-  if (config.enableCorsHandling) {
-    // Si Apache maneja CORS, servir archivos sin headers adicionales
-    
-    // Primero intentar con la ruta absoluta si existe
-    const absoluteUploadPath = '/home/developer/uploads';
+  if (!config.enableCorsHandling) {
+    // Usar la ruta configurada en lugar de hardcodeada
+    const absoluteUploadPath = path.isAbsolute(config.fileUpload.path) 
+      ? config.fileUpload.path 
+      : path.join(process.cwd(), config.fileUpload.path);
+      
     if (require('fs').existsSync(absoluteUploadPath)) {
       app.use('/uploads', express.static(absoluteUploadPath));
     }
@@ -54,8 +55,11 @@ export const setupExpress = (existingApp?: Application): Application => {
       next();
     });
     
-    // Servir archivos estáticos con headers CORS
-    const absoluteUploadPath = '/home/developer/uploads';
+    // Usar la ruta configurada en lugar de hardcodeada
+    const absoluteUploadPath = path.isAbsolute(config.fileUpload.path) 
+      ? config.fileUpload.path 
+      : path.join(process.cwd(), config.fileUpload.path);
+      
     if (require('fs').existsSync(absoluteUploadPath)) {
       app.use('/uploads', express.static(absoluteUploadPath, {
         setHeaders: (res) => {
