@@ -458,4 +458,77 @@ export class UserService {
       updated_at: service.updated_at
     };
   }
+
+
+/**
+ * Obtener información completa de todos los usuarios con paginación
+ * @param params Parámetros de paginación
+ * @returns Resultado paginado con información completa de usuarios
+ */
+async getAllUsersCompleteInfo(params: PaginationParams): Promise<PaginatedResult<any>> {
+  // Establecer valores por defecto para parámetros de paginación
+  const page = params.page || 1;
+  const limit = params.limit || 10;
+  const sort = params.sort || 'id';
+  const order = params.order || 'ASC';
+
+  // Obtener usuarios con paginación usando el método existente
+  const usersResult = await this.userRepository.findWithPagination(
+    { page, limit, sort, order },
+    {
+      relations: ['user_roles', 'user_roles.role'],
+    }
+  );
+
+  // Obtener información completa para cada usuario
+  const usersWithCompleteInfo = await Promise.all(
+    usersResult.items.map(async (user) => {
+      try {
+        // Verificar que el usuario tenga un ID válido
+        if (!user.id || isNaN(Number(user.id))) {
+          console.error('Usuario sin ID válido:', user);
+          return {
+            user: this.mapUserBasicInfo(user),
+            purchases: [],
+            summary: {
+              totalPurchases: 0,
+              totalSpent: 0,
+              activeSessions: 0,
+              completedAppointments: 0
+            }
+          };
+        }
+
+        const purchases = await this.getUserPurchasesWithDetails(user.id);
+        const summary = await this.calculateUserSummary(user.id, purchases);
+        
+        return {
+          user: this.mapUserBasicInfo(user),
+          purchases,
+          summary
+        };
+      } catch (error) {
+        console.error(`Error procesando usuario ${user.id}:`, error);
+        // En caso de error con un usuario específico, retornar información básica
+        return {
+          user: this.mapUserBasicInfo(user),
+          purchases: [],
+          summary: {
+            totalPurchases: 0,
+            totalSpent: 0,
+            activeSessions: 0,
+            completedAppointments: 0
+          }
+        };
+      }
+    })
+  );
+
+  return {
+    items: usersWithCompleteInfo,
+    metadata: usersResult.metadata
+  };
+}
+
+
 }

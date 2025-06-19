@@ -55,10 +55,20 @@ router.put('/profile-complete', validateDto(UpdateUserDto), userController.updat
  */
 router.delete('/account', userController.deleteAccount);
 
+// Información completa del usuario autenticado
+router.get('/complete-info', userController.getUserCompleteInfo);
+
 /**
  * Routes that require admin role
  */
 router.use(restrictTo(['admin']));
+
+/**
+ * @route GET /api/users/all-complete-info
+ * @desc Get complete info for all users
+ * @access Private (Admin only)
+ */
+router.get('/all-complete-info', userController.getAllUsersCompleteInfo);
 
 /**
  * @route GET /api/users
@@ -88,10 +98,9 @@ router.post('/:id/roles/:roleId', userController.assignRole);
  */
 router.delete('/:id/roles/:roleId', userController.removeRole);
 
-// Información completa del usuario autenticado
-router.get('/complete-info', authMiddleware, userController.getUserCompleteInfo);
-
 // Información completa de cualquier usuario (solo admin)
-router.get('/:id/complete-info', authMiddleware, restrictTo(['admin']), userController.getUserCompleteInfoById);
+router.get('/:id/complete-info', userController.getUserCompleteInfoById);
+
+
 
 export default router;

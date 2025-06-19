@@ -402,4 +402,45 @@ export class UserController {
       next(error);
     }
   };
+
+
+  // ... existing code ...
+
+/**
+ * Obtener información completa de todos los usuarios
+ * @route GET /api/users/all-complete-info
+ */
+getAllUsersCompleteInfo = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const params: PaginationParams = {
+      page: req.query.page ? parseInt(req.query.page as string) : 1,
+      limit: req.query.limit ? parseInt(req.query.limit as string) : 10,
+      sort: (req.query.sort as string) || 'id',
+      order: (req.query.order as 'ASC' | 'DESC') || 'ASC',
+    };
+
+    const result = await this.userService.getAllUsersCompleteInfo(params);
+
+    const response: ApiResponse = {
+      success: true,
+      data: result.items,
+      metadata: {
+        totalItems: result.metadata.totalItems,
+        itemCount: result.metadata.itemCount,
+        totalPages: result.metadata.totalPages,
+        currentPage: result.metadata.currentPage,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
 }
