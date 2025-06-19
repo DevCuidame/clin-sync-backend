@@ -2,7 +2,7 @@
 node_modules/
 
 # Archivos de compilación
-dist/
+# dist/
 build/
 
 # Archivos de entorno
