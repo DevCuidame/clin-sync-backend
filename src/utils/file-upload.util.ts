@@ -44,7 +44,10 @@ export class FileUploadService {
       else if (mimeType.includes('pdf')) extension = 'pdf';
       
       // Crear carpeta base si no existe
-      const baseDir = path.join(process.cwd(), config.fileUpload.path);
+      const baseDir = path.isAbsolute(config.fileUpload.path) 
+        ? config.fileUpload.path 
+        : path.join(process.cwd(), config.fileUpload.path);
+        
       if (!fs.existsSync(baseDir)) {
         fs.mkdirSync(baseDir, { recursive: true });
       }
@@ -98,10 +101,12 @@ export class FileUploadService {
       }
       
       // Convertir ruta relativa a absoluta
-      const absolutePath = path.join(
-        process.cwd(), 
-        filePath.replace('/uploads/', config.fileUpload.path + '/')
-      );
+      const absolutePath = path.isAbsolute(config.fileUpload.path)
+        ? filePath.replace('/uploads/', config.fileUpload.path + '/')
+        : path.join(
+            process.cwd(), 
+            filePath.replace('/uploads/', config.fileUpload.path + '/')
+          );
       
       // Verificar si el archivo existe
       if (fs.existsSync(absolutePath)) {
