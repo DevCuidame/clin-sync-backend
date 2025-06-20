@@ -15,6 +15,7 @@ import { userSessionRoutes } from '../modules/user-session/user-session.routes';
 import scheduleRoutes from '../modules/schedule/schedule.routes';
 import availabilityExceptionRoutes from '../modules/availability-exception/availability-exception.routes';
 import { paymentRoutes } from '../modules/payment/payment.routes';
+import timeSlotRoutes from '../modules/time-slot/time-slot.routes';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.use('/professionals', professionalRoutes)
 router.use('/user-sessions', userSessionRoutes);
 router.use('/schedules', scheduleRoutes);
 router.use('/availability-exceptions', availabilityExceptionRoutes);
+router.use('/time-slots', timeSlotRoutes);
 // Rutas de notificación actualizadas
 router.use('/notifications', notificationRoutes);
 // Rutas de pagos con Wompi

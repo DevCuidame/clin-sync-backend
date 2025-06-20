@@ -32,6 +32,8 @@ import { PaymentTransaction, TransactionStatus } from '../../models/payment-tran
 import { PaymentWebhook } from '../../models/payment-webhook.model';
 import { Package } from '../../models/package.model';
 import { User } from '../../models/user.model';
+import { PackageService } from '../../models/package-service.model';
+import { UserSession, UserSessionStatus } from '../../models/user-session.model';
 
 export class WompiService {
   private axiosInstance!: AxiosInstance;
@@ -486,17 +488,36 @@ export class WompiService {
 
   private async handleTransactionUpdated(transaction: WompiTransactionResponse): Promise<void> {
     await this.updateTransactionStatus(transaction.id, transaction.status);
+    
+    // Si la transacción se completó, crear sesiones automáticamente
+    if (transaction.status === WompiTransactionStatus.APPROVED) {
+      const purchase = await this.getPurchaseByTransactionId(transaction.id);
+      if (purchase && purchase.payment_status === PaymentStatus.COMPLETED) {
+        await this.createSessionsForPurchase(purchase);
+      }
+    }
+    
     logger.info('Transaction updated via webhook', {
       transactionId: transaction.id,
-      status: transaction.status
+      status: transaction.status,
+      purchaseId: transaction.status === WompiTransactionStatus.APPROVED ? 
+        (await this.getPurchaseByTransactionId(transaction.id))?.purchase_id : undefined
     });
   }
 
   private async handlePaymentLinkPaid(transaction: WompiTransactionResponse): Promise<void> {
     await this.updateTransactionStatus(transaction.id, transaction.status);
+    
+    // Obtener la compra asociada y crear sesiones automáticamente
+    const purchase = await this.getPurchaseByTransactionId(transaction.id);
+    if (purchase && purchase.payment_status === PaymentStatus.COMPLETED) {
+      await this.createSessionsForPurchase(purchase);
+    }
+    
     logger.info('Payment link paid via webhook', {
       transactionId: transaction.id,
-      paymentLinkId: transaction.paymentLinkId
+      paymentLinkId: transaction.paymentLinkId,
+      purchaseId: purchase?.purchase_id
     });
   }
 
@@ -592,4 +613,73 @@ export class WompiService {
       validationErrors // Add this field
     };
   }
+
+  /**
+   * Obtiene una compra por ID de transacción
+   */
+  private async getPurchaseByTransactionId(transactionId: string): Promise<Purchase | null> {
+    const transactionRepository = AppDataSource.getRepository(PaymentTransaction);
+    
+    const transaction = await transactionRepository.findOne({
+      where: { gateway_transaction_id: transactionId },
+      relations: ['purchase', 'purchase.package', 'purchase.user']
+    });
+    
+    return transaction?.purchase || null;
+  }
+
+  /**
+    * Crea sesiones automáticamente para una compra completada
+    */
+   private async createSessionsForPurchase(purchase: Purchase): Promise<void> {
+     try {
+       const packageServiceRepository = AppDataSource.getRepository(PackageService);
+       const userSessionRepository = AppDataSource.getRepository(UserSession);
+       
+       // Verificar si ya existen sesiones para esta compra
+       const existingSessions = await userSessionRepository.find({
+         where: { purchase_id: purchase.purchase_id }
+       });
+       
+       if (existingSessions.length > 0) {
+         logger.info('Sessions already exist for purchase', {
+           purchaseId: purchase.purchase_id,
+           existingSessionsCount: existingSessions.length
+         });
+         return;
+       }
+       
+       // Obtener servicios del paquete
+       const packageServices = await packageServiceRepository.find({
+         where: { package_id: purchase.package_id },
+         relations: ['service']
+       });
+       
+       // Crear una sesión por cada servicio del paquete
+       for (const packageService of packageServices) {
+         const session = userSessionRepository.create({
+           purchase_id: purchase.purchase_id,
+           service_id: packageService.service_id,
+           sessions_remaining: packageService.sessions_included,
+           expires_at: purchase.expires_at,
+           status: UserSessionStatus.ACTIVE
+         });
+         
+         await userSessionRepository.save(session);
+       }
+       
+       logger.info('Sessions created automatically for purchase', {
+         purchaseId: purchase.purchase_id,
+         packageId: purchase.package_id,
+         servicesCount: packageServices.length
+       });
+       
+     } catch (error) {
+       logger.error('Error creating sessions for purchase', {
+         purchaseId: purchase.purchase_id,
+         error: error instanceof Error ? error.message : 'Unknown error'
+       });
+       throw error;
+     }
+   }
 }

@@ -18,6 +18,7 @@ const user_session_routes_1 = require("../modules/user-session/user-session.rout
 const schedule_routes_1 = __importDefault(require("../modules/schedule/schedule.routes"));
 const availability_exception_routes_1 = __importDefault(require("../modules/availability-exception/availability-exception.routes"));
 const payment_routes_1 = require("../modules/payment/payment.routes");
+const time_slot_routes_1 = __importDefault(require("../modules/time-slot/time-slot.routes"));
 const router = (0, express_1.Router)();
 //Index
 router.use('/auth', auth_routes_1.default);
@@ -31,6 +32,7 @@ router.use('/professionals', professional_routes_1.professionalRoutes);
 router.use('/user-sessions', user_session_routes_1.userSessionRoutes);
 router.use('/schedules', schedule_routes_1.default);
 router.use('/availability-exceptions', availability_exception_routes_1.default);
+router.use('/time-slots', time_slot_routes_1.default);
 // Rutas de notificación actualizadas
 router.use('/notifications', notification_routes_1.notificationRoutes);
 // Rutas de pagos con Wompi

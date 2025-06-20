@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
 import { PurchaseService } from './purchase.service';
+import { PurchaseSessionService } from './purchase-session.service';
 import { CreatePurchaseDto, UpdatePurchaseDto } from './purchase.dto';
 
 export class PurchaseController {
   private purchaseService: PurchaseService;
+  private purchaseSessionService: PurchaseSessionService;
 
   constructor() {
     this.purchaseService = new PurchaseService();
+    this.purchaseSessionService = new PurchaseSessionService();
   }
 
   createPurchase = async (req: Request, res: Response): Promise<void> => {
@@ -160,6 +163,144 @@ export class PurchaseController {
       res.status(500).json({
         success: false,
         message: 'Error retrieving active purchases',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Crear sesiones manualmente para una compra
+   */
+  createSessionsForPurchase = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { purchaseId } = req.params;
+      const sessions = await this.purchaseSessionService.createSessionsForPurchase(parseInt(purchaseId));
+      
+      res.status(201).json({
+        success: true,
+        message: 'Sesiones creadas exitosamente',
+        data: {
+          purchaseId: parseInt(purchaseId),
+          sessionsCreated: sessions.length,
+          sessions
+        }
+      });
+    } catch (error) {
+      const statusCode = error instanceof Error && error.message.includes('no encontrada') ? 404 : 
+                        error instanceof Error && error.message.includes('ya fueron creadas') ? 400 : 500;
+      
+      res.status(statusCode).json({
+        success: false,
+        message: 'Error creando sesiones',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Verificar si una compra tiene sesiones creadas
+   */
+  checkSessionsStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const purchaseId = parseInt(req.params.purchaseId);
+      
+      if (isNaN(purchaseId)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de compra inválido'
+        });
+        return;
+      }
+
+      const hasSessionsCreated = await this.purchaseSessionService.hasSessionsCreated(purchaseId);
+      
+      if (!hasSessionsCreated) {
+        res.status(200).json({
+          success: true,
+          message: 'No se han creado sesiones para esta compra',
+          data: {
+            purchaseId,
+            hasSessionsCreated: false,
+            sessions: [],
+            stats: null
+          }
+        });
+        return;
+      }
+
+      const sessions = await this.purchaseSessionService.getSessionsByPurchase(purchaseId);
+      const stats = await this.purchaseSessionService.getSessionStats(purchaseId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Estado de sesiones obtenido exitosamente',
+        data: {
+          purchaseId,
+          hasSessionsCreated: true,
+          sessions,
+          stats
+        }
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error obteniendo estado de sesiones',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Obtener datos completos de sesiones por paquete
+   */
+  getCompleteSessionsByPackage = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const packageId = parseInt(req.params.packageId);
+      
+      if (isNaN(packageId)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de paquete inválido'
+        });
+        return;
+      }
+
+      const completeData = await this.purchaseSessionService.getCompleteSessionsByPackage(packageId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Datos completos de sesiones obtenidos exitosamente',
+        data: completeData
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Detecta y crea sesiones para compras completadas que no tienen sesiones
+   * Útil para procesar compras que fallaron en la creación automática
+   */
+  detectAndCreateMissingSessions = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.purchaseSessionService.detectAndCreateMissingSessions();
+
+      res.status(200).json({
+        success: true,
+        message: 'Detección y creación de sesiones faltantes completada',
+        data: result
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

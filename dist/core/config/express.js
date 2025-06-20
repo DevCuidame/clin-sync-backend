@@ -29,10 +29,11 @@ const setupExpress = (existingApp) => {
         app.use((0, morgan_1.default)('combined'));
     }
     // Configurar carpetas estáticas según configuración
-    if (environment_1.default.enableCorsHandling) {
-        // Si Apache maneja CORS, servir archivos sin headers adicionales
-        // Primero intentar con la ruta absoluta si existe
-        const absoluteUploadPath = '/home/developer/uploads';
+    if (!environment_1.default.enableCorsHandling) {
+        // Usar la ruta configurada en lugar de hardcodeada
+        const absoluteUploadPath = path_1.default.isAbsolute(environment_1.default.fileUpload.path)
+            ? environment_1.default.fileUpload.path
+            : path_1.default.join(process.cwd(), environment_1.default.fileUpload.path);
         if (require('fs').existsSync(absoluteUploadPath)) {
             app.use('/uploads', express_1.default.static(absoluteUploadPath));
         }
@@ -47,8 +48,10 @@ const setupExpress = (existingApp) => {
             res.header('Cross-Origin-Resource-Policy', 'cross-origin');
             next();
         });
-        // Servir archivos estáticos con headers CORS
-        const absoluteUploadPath = '/home/developer/uploads';
+        // Usar la ruta configurada en lugar de hardcodeada
+        const absoluteUploadPath = path_1.default.isAbsolute(environment_1.default.fileUpload.path)
+            ? environment_1.default.fileUpload.path
+            : path_1.default.join(process.cwd(), environment_1.default.fileUpload.path);
         if (require('fs').existsSync(absoluteUploadPath)) {
             app.use('/uploads', express_1.default.static(absoluteUploadPath, {
                 setHeaders: (res) => {

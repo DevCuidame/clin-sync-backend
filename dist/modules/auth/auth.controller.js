@@ -33,6 +33,7 @@ class AuthController {
      */
     refreshToken = async (req, res, next) => {
         try {
+            console.log("🚀 ~ AuthController ~ refreshToken ~ req.body:", req.body);
             const { refresh_token } = req.body;
             if (!refresh_token) {
                 res.status(400).json({

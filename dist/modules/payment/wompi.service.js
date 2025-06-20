@@ -19,6 +19,8 @@ const payment_transaction_model_1 = require("../../models/payment-transaction.mo
 const payment_webhook_model_1 = require("../../models/payment-webhook.model");
 const package_model_1 = require("../../models/package.model");
 const user_model_1 = require("../../models/user.model");
+const package_service_model_1 = require("../../models/package-service.model");
+const user_session_model_1 = require("../../models/user-session.model");
 class WompiService {
     axiosInstance;
     config;
@@ -405,16 +407,31 @@ class WompiService {
     }
     async handleTransactionUpdated(transaction) {
         await this.updateTransactionStatus(transaction.id, transaction.status);
+        // Si la transacción se completó, crear sesiones automáticamente
+        if (transaction.status === payment_interface_1.WompiTransactionStatus.APPROVED) {
+            const purchase = await this.getPurchaseByTransactionId(transaction.id);
+            if (purchase && purchase.payment_status === purchase_model_1.PaymentStatus.COMPLETED) {
+                await this.createSessionsForPurchase(purchase);
+            }
+        }
         logger_1.default.info('Transaction updated via webhook', {
             transactionId: transaction.id,
-            status: transaction.status
+            status: transaction.status,
+            purchaseId: transaction.status === payment_interface_1.WompiTransactionStatus.APPROVED ?
+                (await this.getPurchaseByTransactionId(transaction.id))?.purchase_id : undefined
         });
     }
     async handlePaymentLinkPaid(transaction) {
         await this.updateTransactionStatus(transaction.id, transaction.status);
+        // Obtener la compra asociada y crear sesiones automáticamente
+        const purchase = await this.getPurchaseByTransactionId(transaction.id);
+        if (purchase && purchase.payment_status === purchase_model_1.PaymentStatus.COMPLETED) {
+            await this.createSessionsForPurchase(purchase);
+        }
         logger_1.default.info('Payment link paid via webhook', {
             transactionId: transaction.id,
-            paymentLinkId: transaction.paymentLinkId
+            paymentLinkId: transaction.paymentLinkId,
+            purchaseId: purchase?.purchase_id
         });
     }
     async saveWebhookEvent(event) {
@@ -495,6 +512,65 @@ class WompiService {
             message,
             validationErrors // Add this field
         };
+    }
+    /**
+     * Obtiene una compra por ID de transacción
+     */
+    async getPurchaseByTransactionId(transactionId) {
+        const transactionRepository = database_1.AppDataSource.getRepository(payment_transaction_model_1.PaymentTransaction);
+        const transaction = await transactionRepository.findOne({
+            where: { gateway_transaction_id: transactionId },
+            relations: ['purchase', 'purchase.package', 'purchase.user']
+        });
+        return transaction?.purchase || null;
+    }
+    /**
+      * Crea sesiones automáticamente para una compra completada
+      */
+    async createSessionsForPurchase(purchase) {
+        try {
+            const packageServiceRepository = database_1.AppDataSource.getRepository(package_service_model_1.PackageService);
+            const userSessionRepository = database_1.AppDataSource.getRepository(user_session_model_1.UserSession);
+            // Verificar si ya existen sesiones para esta compra
+            const existingSessions = await userSessionRepository.find({
+                where: { purchase_id: purchase.purchase_id }
+            });
+            if (existingSessions.length > 0) {
+                logger_1.default.info('Sessions already exist for purchase', {
+                    purchaseId: purchase.purchase_id,
+                    existingSessionsCount: existingSessions.length
+                });
+                return;
+            }
+            // Obtener servicios del paquete
+            const packageServices = await packageServiceRepository.find({
+                where: { package_id: purchase.package_id },
+                relations: ['service']
+            });
+            // Crear una sesión por cada servicio del paquete
+            for (const packageService of packageServices) {
+                const session = userSessionRepository.create({
+                    purchase_id: purchase.purchase_id,
+                    service_id: packageService.service_id,
+                    sessions_remaining: packageService.sessions_included,
+                    expires_at: purchase.expires_at,
+                    status: user_session_model_1.UserSessionStatus.ACTIVE
+                });
+                await userSessionRepository.save(session);
+            }
+            logger_1.default.info('Sessions created automatically for purchase', {
+                purchaseId: purchase.purchase_id,
+                packageId: purchase.package_id,
+                servicesCount: packageServices.length
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Error creating sessions for purchase', {
+                purchaseId: purchase.purchase_id,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            throw error;
+        }
     }
 }
 exports.WompiService = WompiService;
