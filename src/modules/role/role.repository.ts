@@ -1,9 +1,21 @@
 import { BaseRepository } from '../../core/repositories/base.repository';
 import { Role } from '../../models/role.model';
+import { FindManyOptions } from 'typeorm';
 
 export class RoleRepository extends BaseRepository<Role> {
   constructor() {
     super(Role);
+  }
+
+  /**
+   * Encuentra un rol por su ID
+   * @param id ID del rol
+   * @returns El rol encontrado o null
+   */
+  async findById(id: number): Promise<Role | null> {
+    return await this.repository.findOne({
+      where: { role_id: id },
+    });
   }
 
   /**
@@ -15,6 +27,15 @@ export class RoleRepository extends BaseRepository<Role> {
     return await this.repository.findOne({
       where: { role_name: name },
     });
+  }
+
+  /**
+   * Obtiene todos los roles con opciones de filtrado
+   * @param options Opciones de búsqueda
+   * @returns Lista de roles
+   */
+  async findAll(options?: FindManyOptions<Role>): Promise<Role[]> {
+    return await this.repository.find(options);
   }
 
   /**

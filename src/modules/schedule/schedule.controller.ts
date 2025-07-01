@@ -52,6 +52,77 @@ export class ScheduleController {
     }
   }
 
+  async createMultipleSchedules(req: Request, res: Response): Promise<void> {
+    try {
+      const schedulesData: CreateScheduleDto[] = req.body;
+      
+      // Validate that body is an array
+      if (!Array.isArray(schedulesData)) {
+        res.status(400).json({
+          success: false,
+          message: 'Request body must be an array of schedule objects'
+        });
+        return;
+      }
+
+      // Validate that array is not empty
+      if (schedulesData.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Array cannot be empty'
+        });
+        return;
+      }
+
+      // Validate each schedule object
+      for (let i = 0; i < schedulesData.length; i++) {
+        const scheduleData = schedulesData[i];
+        if (!scheduleData.professional_id || !scheduleData.day_of_week || 
+            !scheduleData.start_time || !scheduleData.end_time) {
+          res.status(400).json({
+            success: false,
+            message: `Missing required fields in schedule at index ${i}: professional_id, day_of_week, start_time, end_time`
+          });
+          return;
+        }
+
+        // Validate day_of_week enum
+        if (!Object.values(DayOfWeek).includes(scheduleData.day_of_week)) {
+          res.status(400).json({
+            success: false,
+            message: `Invalid day_of_week at index ${i}. Must be one of: ` + Object.values(DayOfWeek).join(', ')
+          });
+          return;
+        }
+      }
+
+      const result = await this.scheduleService.createMultipleSchedules(schedulesData);
+      
+      const statusCode = result.errors.length > 0 ? 207 : 201; // 207 Multi-Status if there are errors
+      
+      res.status(statusCode).json({
+        success: result.errors.length === 0,
+        message: result.errors.length === 0 
+          ? 'All schedules created successfully'
+          : `${result.success.length} schedules created, ${result.errors.length} failed`,
+        data: {
+          created: result.success,
+          errors: result.errors,
+          summary: {
+            total: schedulesData.length,
+            created: result.success.length,
+            failed: result.errors.length
+          }
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Error creating schedules'
+      });
+    }
+  }
+
   async getAllSchedules(req: Request, res: Response): Promise<void> {
     try {
       const schedules = await this.scheduleService.getAllSchedules();

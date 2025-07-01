@@ -25,6 +25,12 @@ router.get('/professional/:professionalId/available', async (req, res) => {
   await timeSlotController.getAvailableTimeSlots(req, res);
 });
 
+// Hybrid endpoints for automatic slot generation (MUST come before generic routes)
+// Check availability for a specific date (with auto-generation)
+router.get('/professional/:professionalId/availability/:date', async (req, res) => {
+  await timeSlotController.checkAvailability(req, res);
+});
+
 // Get time slots by professional ID and date range
 router.get('/professional/:professionalId/:startDate/:endDate', async (req, res) => {
   await timeSlotController.getTimeSlotsByDateRange(req, res);
@@ -48,6 +54,16 @@ router.put('/:slotId', authMiddleware, async (req, res) => {
 // Delete a time slot
 router.delete('/:slotId', authMiddleware, async (req, res) => {
   await timeSlotController.deleteTimeSlot(req, res);
+});
+
+// Get slot statistics for a specific date
+router.get('/professional/:professionalId/statistics/:date', async (req, res) => {
+  await timeSlotController.getSlotStatistics(req, res);
+});
+
+// Pre-generate time slots for a date range
+router.post('/professional/:professionalId/pre-generate', authMiddleware, async (req, res) => {
+  await timeSlotController.preGenerateSlots(req, res);
 });
 
 export default router;

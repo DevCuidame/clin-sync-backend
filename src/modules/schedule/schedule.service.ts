@@ -54,6 +54,32 @@ export class ScheduleService {
     return this.mapToResponseDto(savedSchedule);
   }
 
+  async createMultipleSchedules(schedulesData: CreateScheduleDto[]): Promise<{
+    success: ScheduleResponseDto[];
+    errors: { index: number; error: string; data: CreateScheduleDto }[];
+  }> {
+    const results: ScheduleResponseDto[] = [];
+    const errors: { index: number; error: string; data: CreateScheduleDto }[] = [];
+
+    for (let i = 0; i < schedulesData.length; i++) {
+      try {
+        const schedule = await this.createSchedule(schedulesData[i]);
+        results.push(schedule);
+      } catch (error: any) {
+        errors.push({
+          index: i,
+          error: error.message || 'Unknown error',
+          data: schedulesData[i]
+        });
+      }
+    }
+
+    return {
+      success: results,
+      errors: errors
+    };
+  }
+
   async getAllSchedules(): Promise<ScheduleResponseDto[]> {
     const schedules = await this.scheduleRepository.find({
       order: { day_of_week: 'ASC', start_time: 'ASC' }

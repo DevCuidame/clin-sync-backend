@@ -3,6 +3,7 @@ import { Router } from 'express';
 // Import statements
 import authRoutes from '../modules/auth/auth.routes';
 import userRoutes from '../modules/user/user.routes';
+import roleRoutes from '../modules/role/role.routes';
 import serviceRoutes from '../modules/service/service.routes';
 import packageRoutes from '../modules/package/package.routes';
 import purchaseRoutes from '../modules/purchase/purchase.routes';
@@ -22,6 +23,7 @@ const router = Router();
 //Index
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/roles', roleRoutes);
 router.use('/services', serviceRoutes);
 router.use('/packages', packageRoutes);
 router.use('/purchases', purchaseRoutes);

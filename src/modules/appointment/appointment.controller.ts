@@ -13,7 +13,11 @@ export class AppointmentController {
 
   async createAppointment(req: Request, res: Response): Promise<void> {
     try {
+
+      const userId = req.user.id;
+
       const dto = plainToClass(CreateAppointmentDto, req.body);
+      dto.user_id = userId;
       const errors = await validate(dto);
 
       if (errors.length > 0) {

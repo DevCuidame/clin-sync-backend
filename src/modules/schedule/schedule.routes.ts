@@ -5,6 +5,11 @@ import { authMiddleware } from '../../middlewares/auth.middleware';
 const router = Router();
 const scheduleController = new ScheduleController();
 
+// Create multiple schedules in batch
+router.post('/batch', authMiddleware, async (req, res) => {
+  await scheduleController.createMultipleSchedules(req, res);
+});
+
 // Create a new schedule
 router.post('/', authMiddleware, async (req, res) => {
   await scheduleController.createSchedule(req, res);
