@@ -10,6 +10,7 @@ router.use(authMiddleware);
 
 // Purchase management routes
 router.post('/', purchaseController.createPurchase);
+router.post('/cash', purchaseController.createCashPurchase);
 router.get('/', purchaseController.getPurchases);
 router.get('/:id', purchaseController.getPurchaseById);
 router.put('/:id', purchaseController.updatePurchase);

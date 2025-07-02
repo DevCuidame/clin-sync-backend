@@ -63,6 +63,11 @@ interface Config {
     clientSecret: string;
     redirectUri: string;
   };
+  
+  whatsapp: {
+    accessToken: string;
+    phoneNumberId: string;
+  };
 }
 
 // Configuración por defecto
@@ -119,7 +124,11 @@ const config: Config = {
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
     paymentMax: parseInt(process.env.RATE_LIMIT_PAYMENT_MAX || '10', 10),
     webhookMax: parseInt(process.env.RATE_LIMIT_WEBHOOK_MAX || '50', 10),
-  }
+  },
+  whatsapp: {
+    accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+  },
 };
 
 // Agregar configuración de Google Calendar si las variables están disponibles

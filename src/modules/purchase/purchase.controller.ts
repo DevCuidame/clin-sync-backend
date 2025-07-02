@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { PurchaseService } from './purchase.service';
 import { PurchaseSessionService } from './purchase-session.service';
-import { CreatePurchaseDto, UpdatePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto } from './purchase.dto';
+import { validateCashPurchase, sanitizeCashPurchaseData } from './validation/cash-purchase.validation';
+import { WompiCurrency } from '../payment/payment.interface';
 
 export class PurchaseController {
   private purchaseService: PurchaseService;
@@ -25,6 +27,52 @@ export class PurchaseController {
       res.status(500).json({
         success: false,
         message: 'Error creating purchase',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  createCashPurchase = async (req: Request, res: Response): Promise<void> => {
+    try {
+      let purchaseData: CreateCashPurchaseDto = req.body;
+      const userId = (req as any).user?.id;
+      const currency = (req.body.currency as WompiCurrency) || WompiCurrency.COP;
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'Usuario no autenticado'
+        });
+        return;
+      }
+
+      // Override user_id with authenticated user
+      purchaseData.user_id = userId;
+
+      // Sanitizar datos de entrada
+      purchaseData = sanitizeCashPurchaseData(purchaseData);
+
+      // Validar datos de compra en efectivo
+      const validation = validateCashPurchase(purchaseData, currency);
+      if (!validation.isValid) {
+        res.status(400).json({
+          success: false,
+          message: 'Datos de compra inválidos',
+          errors: validation.errors
+        });
+        return;
+      }
+
+      const newPurchase = await this.purchaseService.createCashPurchase(purchaseData);
+      res.status(201).json({
+        success: true,
+        message: 'Compra en efectivo creada exitosamente. Estado: Pendiente de confirmación por administrador.',
+        data: newPurchase
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error creando compra en efectivo',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

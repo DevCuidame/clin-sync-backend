@@ -14,7 +14,8 @@ export enum WompiPaymentMethod {
   NEQUI = 'NEQUI',
   PSE = 'PSE',
   BANCOLOMBIA_TRANSFER = 'BANCOLOMBIA_TRANSFER',
-  BANCOLOMBIA_COLLECT = 'BANCOLOMBIA_COLLECT'
+  BANCOLOMBIA_COLLECT = 'BANCOLOMBIA_COLLECT',
+  CASH = 'CASH'
 }
 
 export enum WompiTransactionStatus {
@@ -222,7 +223,6 @@ export interface WompiEnvironmentConfig {
   webhookSecret: string;
   environment: 'sandbox' | 'production';
   baseUrl: string;
-  acceptanceToken: string;
 }
 
 // Tipos para métodos de pago específicos

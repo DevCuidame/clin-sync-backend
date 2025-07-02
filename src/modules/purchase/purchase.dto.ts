@@ -1,4 +1,5 @@
 import { PaymentStatus } from '../../models/purchase.model';
+import { WompiPaymentMethod } from '../payment/payment.interface';
 
 export interface CreatePurchaseDto {
   user_id: number;
@@ -42,5 +43,20 @@ export interface PurchaseResponseDto {
     price: number;
     total_sessions: number;
     validity_days: number;
+  };
+}
+
+export interface CreateCashPurchaseDto {
+  user_id: number;
+  package_id: number;
+  amount_paid: number;
+  customer_info: {
+    email: string;
+    full_name: string;
+    phone_number?: string;
+  };
+  payment_details?: {
+    notes?: string;
+    reference?: string;
   };
 }

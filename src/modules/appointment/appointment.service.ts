@@ -89,7 +89,12 @@ export class AppointmentService {
       const { user_id, professional_id, service_id, status, start_date, end_date, page = 1, limit = 10 } = query;
       const skip = (page - 1) * limit;
 
-      const queryBuilder = this.appointmentRepository.createQueryBuilder('appointment');
+      const queryBuilder = this.appointmentRepository.createQueryBuilder('appointment')
+        .leftJoinAndSelect('appointment.user', 'user')
+        .leftJoinAndSelect('appointment.professional', 'professional')
+        .leftJoinAndSelect('professional.user', 'professionalUser')
+        .leftJoinAndSelect('appointment.service', 'service')
+        .leftJoinAndSelect('appointment.user_session', 'user_session');
 
       if (user_id) {
         queryBuilder.andWhere('appointment.user_id = :user_id', { user_id });
@@ -141,7 +146,8 @@ export class AppointmentService {
   async getAppointmentById(appointmentId: number): Promise<Appointment | null> {
     try {
       return await this.appointmentRepository.findOne({
-        where: { appointment_id: appointmentId }
+        where: { appointment_id: appointmentId },
+        relations: ['user', 'professional', 'professional.user', 'service', 'user_session']
       });
     } catch (error) {
       if (error instanceof AppError) {

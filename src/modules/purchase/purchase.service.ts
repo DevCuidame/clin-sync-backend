@@ -3,7 +3,8 @@ import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { User } from '../../models/user.model';
 import { Package } from '../../models/package.model';
-import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto } from './purchase.dto';
+import { WompiPaymentMethod } from '../payment/payment.interface';
 
 export class PurchaseService {
   private purchaseRepository: Repository<Purchase>;
@@ -46,6 +47,54 @@ export class PurchaseService {
       transaction_id: purchaseData.transaction_id,
       expires_at: expiresAt,
       payment_details: purchaseData.payment_details
+    });
+
+    const savedPurchase = await this.purchaseRepository.save(newPurchase);
+    return this.mapToResponseDto(savedPurchase);
+  }
+
+  async createCashPurchase(purchaseData: CreateCashPurchaseDto): Promise<PurchaseResponseDto> {
+    // Verify user exists
+    const user = await this.userRepository.findOne({
+      where: { id: purchaseData.user_id }
+    });
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify package exists
+    const packageData = await this.packageRepository.findOne({
+      where: { package_id: purchaseData.package_id }
+    });
+    if (!packageData) {
+      throw new Error('Package not found');
+    }
+
+    // Calculate expires_at based on package validity
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + packageData.validity_days);
+
+    // Generate a unique reference for cash payment
+    const cashReference = `CASH-${Date.now()}-${purchaseData.user_id}`;
+
+    // Prepare payment details with customer info and reference
+    const paymentDetails = {
+      customer_info: purchaseData.customer_info,
+      payment_reference: cashReference,
+      payment_type: 'cash',
+      created_at: new Date().toISOString(),
+      ...purchaseData.payment_details
+    };
+
+    const newPurchase = this.purchaseRepository.create({
+      user_id: purchaseData.user_id,
+      package_id: purchaseData.package_id,
+      amount_paid: purchaseData.amount_paid,
+      payment_status: PaymentStatus.PENDING, // Always pending for cash payments
+      payment_method: WompiPaymentMethod.CASH,
+      transaction_id: cashReference,
+      expires_at: expiresAt,
+      payment_details: paymentDetails
     });
 
     const savedPurchase = await this.purchaseRepository.save(newPurchase);

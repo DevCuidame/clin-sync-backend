@@ -48,12 +48,11 @@ export function getWompiEnvironmentConfig(): WompiEnvironmentConfig {
   return {
     publicKey: getRequiredEnvVar('WOMPI_PUBLIC_KEY'),
     privateKey: getRequiredEnvVar('WOMPI_PRIVATE_KEY'),
-    webhookSecret: getRequiredEnvVar('WOMPI_WEBHOOK_SECRET'),
+    webhookSecret: process.env.WOMPI_WEBHOOK_SECRET || '',
     environment: process.env.WOMPI_ENVIRONMENT as 'sandbox' | 'production' || 'sandbox',
     baseUrl: process.env.WOMPI_ENVIRONMENT === 'production' 
       ? WOMPI_CONSTANTS.PRODUCTION_URL 
-      : WOMPI_CONSTANTS.SANDBOX_URL,
-    acceptanceToken: getRequiredEnvVar('WOMPI_ACCEPTANCE_TOKEN')
+      : WOMPI_CONSTANTS.SANDBOX_URL
   };
 }
 
@@ -285,6 +284,11 @@ export function getPaymentMethodLimits(paymentMethod: WompiPaymentMethod, curren
     [WompiPaymentMethod.BANCOLOMBIA_COLLECT]: {
       minAmount: currency === WompiCurrency.COP ? 100 : 1,
       dailyLimit: currency === WompiCurrency.COP ? 10000000 : 3000
+    },
+    [WompiPaymentMethod.CASH]: {
+      minAmount: currency === WompiCurrency.COP ? 100 : 1, // $1 COP o $0.01 USD
+      maxAmount: currency === WompiCurrency.COP ? 200000000 : 15000, // $5,000,000 COP o $1,500 USD
+      dailyLimit: currency === WompiCurrency.COP ? 1000000000 : 300000 // $10,000,000 COP o $3,000 USD
     }
   };
 
@@ -298,6 +302,11 @@ export function getPaymentMethodLimits(paymentMethod: WompiPaymentMethod, curren
  * Valida si un método de pago está disponible para una moneda
  */
 export function isPaymentMethodAvailable(paymentMethod: WompiPaymentMethod, currency: WompiCurrency): boolean {
+  // CASH is available for all currencies
+  if (paymentMethod === WompiPaymentMethod.CASH) {
+    return true;
+  }
+
   // PSE y métodos de Bancolombia solo están disponibles para COP
   const copOnlyMethods = [
     WompiPaymentMethod.PSE,

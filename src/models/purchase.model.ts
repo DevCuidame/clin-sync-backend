@@ -41,6 +41,9 @@ export class Purchase {
   @CreateDateColumn()
   purchase_date!: Date;
 
+  @UpdateDateColumn()
+  updated_at!: Date;
+
   @Column({ type: 'timestamp' })
   expires_at!: Date;
 

@@ -17,6 +17,7 @@ import scheduleRoutes from '../modules/schedule/schedule.routes';
 import availabilityExceptionRoutes from '../modules/availability-exception/availability-exception.routes';
 import { paymentRoutes } from '../modules/payment/payment.routes';
 import timeSlotRoutes from '../modules/time-slot/time-slot.routes';
+import reviewRoutes from '../modules/review/review.routes';
 
 const router = Router();
 
@@ -38,5 +39,7 @@ router.use('/time-slots', timeSlotRoutes);
 router.use('/notifications', notificationRoutes);
 // Rutas de pagos con Wompi
 router.use('/payments', paymentRoutes);
+// Rutas de reseñas
+router.use('/reviews', reviewRoutes);
 
 export default router;

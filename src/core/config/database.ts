@@ -11,6 +11,7 @@ import { Package } from '../../models/package.model';
 import { Purchase } from '../../models/purchase.model';
 import { Appointment } from '../../models/appointment.model';
 import { Notification } from '../../models/notification.model';
+import { Review } from '../../models/review.model';
 import { Department, Township } from '../../models/location.model';
 
 const typeOrmConfig: PostgresConnectionOptions = {
@@ -35,6 +36,7 @@ const typeOrmConfig: PostgresConnectionOptions = {
     Purchase,
     Appointment,
     Notification,
+    Review,
     
     // Location entities
     Department,

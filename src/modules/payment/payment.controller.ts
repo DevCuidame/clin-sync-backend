@@ -17,6 +17,8 @@ import {
   PaymentHistoryFiltersDto,
 } from './dto/payment.dto';
 import { WompiTransactionStatus, WompiCurrency, CreateWompiTransactionDto, CreatePaymentLinkDto as WompiPaymentLinkDto } from './payment.interface';
+import { AppDataSource } from '../../core/config/database';
+import { Purchase, PaymentStatus } from '../../models/purchase.model';
 
 // Utility function to handle async errors
 const catchAsync = (fn: Function) => {
@@ -43,6 +45,72 @@ export class PaymentController {
   }
 
 
+
+  /**
+   * Obtiene el estado de una transacción de efectivo desde la base de datos local
+   */
+  private async getCashTransactionStatus(transactionId: string) {
+    try {
+      // Buscar la compra por transaction_id
+      const purchase = await AppDataSource.getRepository(Purchase)
+        .createQueryBuilder('purchase')
+        .leftJoinAndSelect('purchase.user', 'user')
+        .leftJoinAndSelect('purchase.package', 'package')
+        .where('purchase.transaction_id = :transactionId', { transactionId })
+        .getOne();
+
+      if (!purchase) {
+        return null;
+      }
+
+      // Mapear el estado de la compra al formato de respuesta de transacción
+      return {
+        id: transactionId,
+        status: this.mapPaymentStatusToTransactionStatus(purchase.payment_status),
+        amount_in_cents: Math.round(purchase.amount_paid * 100),
+        currency: 'COP', // Asumiendo COP para efectivo
+        payment_method: {
+          type: 'CASH',
+          extra: {
+            name: 'Efectivo'
+          }
+        },
+        reference: transactionId,
+        customer_email: purchase.payment_details?.customer_info?.email || 'N/A',
+        created_at: purchase.purchase_date,
+        finalized_at: purchase.payment_status === PaymentStatus.COMPLETED ? purchase.updated_at : null,
+        purchase_details: {
+          purchase_id: purchase.purchase_id,
+          package_name: purchase.package?.package_name,
+          user_email: purchase.user?.email,
+          expires_at: purchase.expires_at
+        }
+      };
+    } catch (error) {
+      logger.error('Error getting cash transaction status', { transactionId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Mapea el estado de pago de la compra al estado de transacción
+   */
+  private mapPaymentStatusToTransactionStatus(paymentStatus: PaymentStatus): string {
+    switch (paymentStatus) {
+      case PaymentStatus.PENDING:
+        return 'PENDING';
+      case PaymentStatus.COMPLETED:
+        return 'APPROVED';
+      case PaymentStatus.FAILED:
+        return 'DECLINED';
+      case PaymentStatus.CANCELLED:
+        return 'CANCELLED';
+      case PaymentStatus.REFUNDED:
+        return 'REFUNDED';
+      default:
+        return 'PENDING';
+    }
+  }
 
   async createTransaction(req: Request, res: Response, next: NextFunction): Promise<void> {
     const transactionData: CreateTransactionDto = req.body;
@@ -226,6 +294,26 @@ export class PaymentController {
 
     logger.info('Getting transaction status', { transactionId });
 
+    // Verificar si es una transacción de efectivo
+    if (transactionId.startsWith('CASH-')) {
+      // Para transacciones de efectivo, consultar la base de datos local
+      const cashTransaction = await this.getCashTransactionStatus(transactionId);
+      
+      if (!cashTransaction) {
+        return res.status(404).json({
+          success: false,
+          message: 'Transacción de efectivo no encontrada'
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Estado de transacción de efectivo obtenido exitosamente',
+        data: cashTransaction
+      });
+    }
+
+    // Para transacciones de Wompi, usar el servicio normal
     const transaction = await this.wompiService.getTransactionStatus(transactionId);
 
     res.status(200).json({

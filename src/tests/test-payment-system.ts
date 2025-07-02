@@ -155,6 +155,16 @@ async function createPaymentTransaction(): Promise<boolean> {
   try {
     console.log('\n💳 Creando transacción de pago...');
     
+    // Primero obtener los tokens de aceptación
+    console.log('📋 Obteniendo tokens de aceptación...');
+    const tokensResponse = await axios.get(
+      `${API_URL}/payments/acceptance-tokens`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    const acceptanceTokens = tokensResponse.data.data;
+    console.log('✅ Tokens de aceptación obtenidos');
+    
     const transactionData = {
       purchaseId: testPackageId,
       amount: 50000, // $50,000 COP
@@ -171,7 +181,9 @@ async function createPaymentTransaction(): Promise<boolean> {
       metadata: {
         testMode: true,
         testTimestamp: new Date().toISOString()
-      }
+      },
+      acceptanceToken: acceptanceTokens.presigned_acceptance.acceptance_token,
+      acceptPersonalAuth: acceptanceTokens.presigned_personal_data_auth.acceptance_token
     };
     
     const response: AxiosResponse<TransactionResponse> = await axios.post(
