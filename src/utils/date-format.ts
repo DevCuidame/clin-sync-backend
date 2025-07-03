@@ -1,4 +1,14 @@
 /**
+ * Crear una fecha local desde un string YYYY-MM-DD sin problemas de zona horaria
+ * @param dateString Fecha en formato YYYY-MM-DD
+ * @returns Objeto Date en zona horaria local
+ */
+export function createLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month - 1 porque los meses en JS van de 0-11
+}
+
+/**
  * Formatear fecha de nacimiento a formato mm/dd/yyyy
  * @param birthDate Fecha de nacimiento (string o Date)
  * @returns Fecha formateada en formato mm/dd/yyyy o null si no es válida

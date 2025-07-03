@@ -5,6 +5,7 @@ import routes from './routes';
 import config from './core/config/environment';
 import logger from './utils/logger';
 import { corsMiddleware } from './middlewares/cors.middleware';
+import { initializeDatabaseCleanup, shutdownDatabaseCleanup } from './modules/database-cleanup';
 
 const app = express();
 
@@ -66,6 +67,9 @@ const initializeApp = async (): Promise<void> => {
   try {
     await initializeDatabase();
     
+    // Inicializar módulo de limpieza de base de datos
+    initializeDatabaseCleanup();
+    
     // Debug: Mostrar rutas registradas
     app._router.stack.forEach((middleware: any) => {
       if (middleware.route) {
@@ -84,6 +88,19 @@ const initializeApp = async (): Promise<void> => {
     process.exit(1);
   }
 };
+
+// Manejar cierre graceful de la aplicación
+process.on('SIGTERM', () => {
+  logger.info('🔄 Recibida señal SIGTERM, cerrando aplicación...');
+  shutdownDatabaseCleanup();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  logger.info('🔄 Recibida señal SIGINT, cerrando aplicación...');
+  shutdownDatabaseCleanup();
+  process.exit(0);
+});
 
 // Inicializar aplicación
 initializeApp();

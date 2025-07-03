@@ -251,6 +251,18 @@ export class ScheduleController {
         filters.professional_id = professionalId;
       }
       
+      if (req.query.user_id) {
+        const userId = parseInt(req.query.user_id as string);
+        if (isNaN(userId)) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid user_id parameter'
+          });
+          return;
+        }
+        filters.user_id = userId;
+      }
+      
       if (req.query.day_of_week) {
         const dayOfWeek = req.query.day_of_week as DayOfWeek;
         if (!Object.values(DayOfWeek).includes(dayOfWeek)) {

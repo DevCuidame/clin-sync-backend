@@ -19,6 +19,7 @@ router.patch('/:id/cancel', appointmentController.cancelAppointment.bind(appoint
 router.patch('/:id/reschedule', appointmentController.rescheduleAppointment.bind(appointmentController));
 router.patch('/:id/confirm', appointmentController.confirmAppointment.bind(appointmentController));
 router.patch('/:id/complete', appointmentController.completeAppointment.bind(appointmentController));
+router.patch('/:id/no-show', appointmentController.markAsNoShow.bind(appointmentController));
 router.delete('/:id', appointmentController.deleteAppointment.bind(appointmentController));
 
 // Rutas de Google Calendar (sin autenticación para callback)

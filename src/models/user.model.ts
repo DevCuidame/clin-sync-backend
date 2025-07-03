@@ -1,6 +1,7 @@
 import { IsOptional, IsString } from 'class-validator';
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn, OneToOne } from 'typeorm';
 import { UserRole } from './user-role.model';
+import { Professional } from './professional.model';
 
 export enum UserStatus {
   ACTIVE = 'active',

@@ -10,6 +10,7 @@ import {
   TimeSlotFilterDto,
   BulkCreateTimeSlotsDto
 } from './time-slot.interface';
+import { createLocalDate } from '../../utils/date-format';
 
 export class TimeSlotService {
   private timeSlotRepository: Repository<TimeSlot>;
@@ -21,9 +22,10 @@ export class TimeSlotService {
   }
 
   async createTimeSlot(timeSlotData: CreateTimeSlotDto): Promise<TimeSlotResponseDto> {
-    // Verify professional exists
-    const professional = await this.professionalRepository.findOne({
-      where: { professional_id: timeSlotData.professional_id }
+    console.log("🚀 ~ TimeSlotService ~ createTimeSlot ~ timeSlotData:", timeSlotData)
+    // Verify professional exists - if professional_id is actually user_id, find by user_id
+    let professional = await this.professionalRepository.findOne({
+      where: { user_id: timeSlotData.professional_id }
     });
 
     if (!professional) {
@@ -46,7 +48,8 @@ export class TimeSlotService {
 
     const timeSlot = this.timeSlotRepository.create({
       ...timeSlotData,
-      slot_date: new Date(timeSlotData.slot_date),
+      professional_id: professional.professional_id,
+      slot_date: createLocalDate(timeSlotData.slot_date),
       status: (timeSlotData.status as SlotStatus) || SlotStatus.AVAILABLE,
       max_bookings: timeSlotData.max_bookings || 1,
       current_bookings: 0
@@ -60,9 +63,20 @@ export class TimeSlotService {
     professionalId: number,
     filters: TimeSlotFilterDto = {}
   ): Promise<TimeSlotResponseDto[]> {
+    // First, verify if professionalId is actually a user_id
+    let actualProfessionalId = professionalId;
+    
+    const professional = await this.professionalRepository.findOne({
+      where: { user_id: professionalId }
+    });
+    
+    if (professional) {
+      actualProfessionalId = professional.professional_id;
+    }
+
     const queryBuilder = this.timeSlotRepository
       .createQueryBuilder('timeSlot')
-      .where('timeSlot.professional_id = :professionalId', { professionalId });
+      .where('timeSlot.professional_id = :professionalId', { professionalId: actualProfessionalId });
 
     // Apply date filters
     if (filters.start_date) {
@@ -108,7 +122,8 @@ export class TimeSlotService {
 
   async getTimeSlotById(slotId: number): Promise<TimeSlotResponseDto | null> {
     const timeSlot = await this.timeSlotRepository.findOne({
-      where: { slot_id: slotId }
+      where: { slot_id: slotId },
+      relations: ['professional']
     });
 
     if (!timeSlot) {
@@ -141,8 +156,15 @@ export class TimeSlotService {
   }
 
   async updateTimeSlot(slotId: number, updateData: UpdateTimeSlotDto): Promise<TimeSlotResponseDto> {
+
+     // Verify professional exists - if professional_id is actually user_id, find by user_id
+    let professional = await this.professionalRepository.findOne({
+      where: { user_id: updateData.professional_id }
+    });
+
     const timeSlot = await this.timeSlotRepository.findOne({
-      where: { slot_id: slotId }
+      where: { slot_id: slotId },
+      relations: ['professional']
     });
 
     if (!timeSlot) {
@@ -172,7 +194,7 @@ export class TimeSlotService {
         : new Date(timeSlot.slot_date);
       const slotDate = updateData.slot_date || currentSlotDate.toISOString().split('T')[0];
       await this.checkForOverlappingSlots(
-        timeSlot.professional_id,
+        timeSlot.professional.professional_id,
         slotDate,
         startTime,
         endTime,
@@ -183,7 +205,7 @@ export class TimeSlotService {
     // Update the time slot
     Object.assign(timeSlot, {
       ...updateData,
-      slot_date: updateData.slot_date ? new Date(updateData.slot_date) : timeSlot.slot_date,
+      slot_date: updateData.slot_date ? createLocalDate(updateData.slot_date) : timeSlot.slot_date,
       status: updateData.status ? (updateData.status as SlotStatus) : timeSlot.status
     });
 
@@ -197,10 +219,17 @@ export class TimeSlotService {
   }
 
   async bulkCreateTimeSlots(bulkData: BulkCreateTimeSlotsDto): Promise<TimeSlotResponseDto[]> {
-    // Verify professional exists
-    const professional = await this.professionalRepository.findOne({
+    // Verify professional exists - if professional_id is actually user_id, find by user_id
+    let professional = await this.professionalRepository.findOne({
       where: { professional_id: bulkData.professional_id }
     });
+
+    // If not found by professional_id, try to find by user_id (frontend might send user_id)
+    if (!professional) {
+      professional = await this.professionalRepository.findOne({
+        where: { user_id: bulkData.professional_id }
+      });
+    }
 
     if (!professional) {
       throw new Error('Professional not found');
@@ -213,8 +242,8 @@ export class TimeSlotService {
     this.validateDate(bulkData.start_date);
     this.validateDate(bulkData.end_date);
 
-    const startDate = new Date(bulkData.start_date);
-    const endDate = new Date(bulkData.end_date);
+    const startDate = createLocalDate(bulkData.start_date);
+    const endDate = createLocalDate(bulkData.end_date);
 
     if (startDate > endDate) {
       throw new Error('Start date must be before or equal to end date');
@@ -233,7 +262,7 @@ export class TimeSlotService {
         // Check if this date should be excluded
         if (!bulkData.exclude_dates || !bulkData.exclude_dates.includes(dateString)) {
           const slotsForDay = this.generateSlotsForDay(
-            bulkData.professional_id,
+            professional.professional_id,
             dateString,
             bulkData.start_time,
             bulkData.end_time,
@@ -287,7 +316,7 @@ export class TimeSlotService {
       
       const timeSlot = this.timeSlotRepository.create({
         professional_id: professionalId,
-        slot_date: new Date(date),
+        slot_date: createLocalDate(date),
         start_time: slotStartTime,
         end_time: slotEndTime,
         duration_minutes: durationMinutes,

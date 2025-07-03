@@ -10,6 +10,7 @@ import {
   BulkCreateAvailabilityExceptionDto
 } from './availability-exception.interface';
 import { Repository } from 'typeorm';
+import { createLocalDate } from '../../utils/date-format';
 
 export class AvailabilityExceptionService {
   private availabilityExceptionRepository: Repository<AvailabilityException>;
@@ -21,10 +22,17 @@ export class AvailabilityExceptionService {
   }
 
   async createAvailabilityException(exceptionData: CreateAvailabilityExceptionDto): Promise<AvailabilityExceptionResponseDto> {
-    // Verify professional exists
-    const professional = await this.professionalRepository.findOne({
+    // Verify professional exists - if professional_id is actually user_id, find by user_id
+    let professional = await this.professionalRepository.findOne({
       where: { professional_id: exceptionData.professional_id }
     });
+
+    // If not found by professional_id, try to find by user_id (frontend might send user_id)
+    if (!professional) {
+      professional = await this.professionalRepository.findOne({
+        where: { user_id: exceptionData.professional_id }
+      });
+    }
 
     if (!professional) {
       throw new Error('Professional not found');
@@ -48,7 +56,7 @@ export class AvailabilityExceptionService {
 
     // Check for overlapping exceptions
     await this.checkForOverlappingExceptions(
-      exceptionData.professional_id,
+      professional.professional_id,
       exceptionData.exception_date,
       exceptionData.start_time,
       exceptionData.end_time,
@@ -57,7 +65,8 @@ export class AvailabilityExceptionService {
 
     const exception = this.availabilityExceptionRepository.create({
       ...exceptionData,
-      exception_date: new Date(exceptionData.exception_date)
+      professional_id: professional.professional_id,
+      exception_date: createLocalDate(exceptionData.exception_date)
     });
 
     const savedException = await this.availabilityExceptionRepository.save(exception);
@@ -65,10 +74,17 @@ export class AvailabilityExceptionService {
   }
 
   async bulkCreateAvailabilityExceptions(bulkData: BulkCreateAvailabilityExceptionDto): Promise<AvailabilityExceptionResponseDto[]> {
-    // Verify professional exists
-    const professional = await this.professionalRepository.findOne({
+    // Verify professional exists - if professional_id is actually user_id, find by user_id
+    let professional = await this.professionalRepository.findOne({
       where: { professional_id: bulkData.professional_id }
     });
+
+    // If not found by professional_id, try to find by user_id (frontend might send user_id)
+    if (!professional) {
+      professional = await this.professionalRepository.findOne({
+        where: { user_id: bulkData.professional_id }
+      });
+    }
 
     if (!professional) {
       throw new Error('Professional not found');
@@ -78,7 +94,7 @@ export class AvailabilityExceptionService {
 
     for (const exceptionData of bulkData.exceptions) {
       const fullExceptionData: CreateAvailabilityExceptionDto = {
-        professional_id: bulkData.professional_id,
+        professional_id: professional.professional_id,
         ...exceptionData
       };
 
@@ -136,8 +152,19 @@ export class AvailabilityExceptionService {
   }
 
   async getAvailabilityExceptionsByProfessional(professionalId: number): Promise<AvailabilityExceptionResponseDto[]> {
+    // First, verify if professionalId is actually a user_id
+    let actualProfessionalId = professionalId;
+    
+    const professional = await this.professionalRepository.findOne({
+      where: { user_id: professionalId }
+    });
+    
+    if (professional) {
+      actualProfessionalId = professional.professional_id;
+    }
+
     const exceptions = await this.availabilityExceptionRepository.find({
-      where: { professional_id: professionalId },
+      where: { professional_id: actualProfessionalId },
       order: { exception_date: 'ASC', start_time: 'ASC' }
     });
     return exceptions.map(exception => this.mapToResponseDto(exception));
@@ -178,12 +205,23 @@ export class AvailabilityExceptionService {
     startDate: string, 
     endDate: string
   ): Promise<AvailabilityExceptionResponseDto[]> {
+    // First, verify if professionalId is actually a user_id
+    let actualProfessionalId = professionalId;
+    
+    const professional = await this.professionalRepository.findOne({
+      where: { user_id: professionalId }
+    });
+    
+    if (professional) {
+      actualProfessionalId = professional.professional_id;
+    }
+
     const exceptions = await this.availabilityExceptionRepository.find({
       where: {
-        professional_id: professionalId,
+        professional_id: actualProfessionalId,
         exception_date: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
+          $gte: createLocalDate(startDate),
+          $lte: createLocalDate(endDate)
         } as any
       },
       order: { exception_date: 'ASC', start_time: 'ASC' }
@@ -208,18 +246,18 @@ export class AvailabilityExceptionService {
 
     if (filters.specific_date) {
       queryBuilder.andWhere('exception.exception_date = :specificDate', {
-        specificDate: new Date(filters.specific_date)
+        specificDate: createLocalDate(filters.specific_date)
       });
     } else {
       if (filters.date_from) {
         queryBuilder.andWhere('exception.exception_date >= :dateFrom', {
-          dateFrom: new Date(filters.date_from)
+          dateFrom: createLocalDate(filters.date_from)
         });
       }
 
       if (filters.date_to) {
         queryBuilder.andWhere('exception.exception_date <= :dateTo', {
-          dateTo: new Date(filters.date_to)
+          dateTo: createLocalDate(filters.date_to)
         });
       }
     }
@@ -280,7 +318,7 @@ export class AvailabilityExceptionService {
 
     const updatePayload: any = { ...updateData };
     if (updateData.exception_date) {
-      updatePayload.exception_date = new Date(updateData.exception_date);
+      updatePayload.exception_date = createLocalDate(updateData.exception_date);
     }
 
     await this.availabilityExceptionRepository.update(exceptionId, updatePayload);
@@ -310,8 +348,8 @@ export class AvailabilityExceptionService {
     const queryBuilder = this.availabilityExceptionRepository.createQueryBuilder()
       .delete()
       .where('professional_id = :professionalId', { professionalId })
-      .andWhere('exception_date >= :startDate', { startDate: new Date(startDate) })
-      .andWhere('exception_date <= :endDate', { endDate: new Date(endDate) });
+      .andWhere('exception_date >= :startDate', { startDate: createLocalDate(startDate) })
+      .andWhere('exception_date <= :endDate', { endDate: createLocalDate(endDate) });
 
     const result = await queryBuilder.execute();
     return result.affected || 0;
@@ -357,7 +395,7 @@ export class AvailabilityExceptionService {
     const queryBuilder = this.availabilityExceptionRepository.createQueryBuilder('exception')
       .where('exception.professional_id = :professionalId', { professionalId })
       .andWhere('exception.exception_date = :exceptionDate', { 
-        exceptionDate: new Date(exceptionDate) 
+        exceptionDate: createLocalDate(exceptionDate) 
       });
 
     if (excludeExceptionId) {

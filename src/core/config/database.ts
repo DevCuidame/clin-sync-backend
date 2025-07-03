@@ -12,6 +12,17 @@ import { Purchase } from '../../models/purchase.model';
 import { Appointment } from '../../models/appointment.model';
 import { Notification } from '../../models/notification.model';
 import { Review } from '../../models/review.model';
+import { TimeSlot } from '../../models/time-slot.model';
+import { Role } from '../../models/role.model';
+import { UserRole } from '../../models/user-role.model';
+import { UserSession } from '../../models/user-session.model';
+import { Schedule } from '../../models/schedule.model';
+import { AvailabilityException } from '../../models/availability-exception.model';
+import { ProfessionalService } from '../../models/professional-service.model';
+import { PackageService } from '../../models/package-service.model';
+import { PaymentTransaction } from '../../models/payment-transaction.model';
+import { PaymentWebhook } from '../../models/payment-webhook.model';
+import { NotificationDeliveryLog } from '../../models/notification-extended.model';
 import { Department, Township } from '../../models/location.model';
 
 const typeOrmConfig: PostgresConnectionOptions = {
@@ -25,27 +36,38 @@ const typeOrmConfig: PostgresConnectionOptions = {
   synchronize: false, // No sincronizar - ya tenemos una base de datos existente
   migrationsRun: false,
   logging: ['error'],
-  
+
   // Register all entities explicitly
   entities: [
     // Main entities
     User,
+    Role,
+    UserRole,
     Professional,
     Service,
+    ProfessionalService,
     Package,
+    PackageService,
     Purchase,
+    PaymentTransaction,
+    PaymentWebhook,
+    UserSession,
     Appointment,
+    Schedule,
+    TimeSlot,
+    AvailabilityException,
     Notification,
+    NotificationDeliveryLog,
     Review,
-    
+
     // Location entities
     Department,
     Township,
-    
+
     // Fallback to glob pattern for any missing entities
-    path.join(__dirname, '../../models/**/*.{js,ts}')
+    path.join(__dirname, '../../models/**/*.{js,ts}'),
   ],
-  
+
   migrations: [path.join(__dirname, '../migrations/**/*.{js,ts}')],
   ssl: config.env === 'production',
 };

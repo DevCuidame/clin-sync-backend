@@ -8,6 +8,7 @@ import { User } from '../../models/user.model';
 import { Professional } from '../../models/professional.model';
 import { Service } from '../../models/service.model';
 import logger from '../../utils/logger';
+import { createLocalDate } from '../../utils/date-format';
 
 export class AppointmentService {
   private appointmentRepository: Repository<Appointment>;
@@ -33,7 +34,7 @@ export class AppointmentService {
   async createAppointment(data: CreateAppointmentDto): Promise<Appointment> {
     try {
       // Validar fecha
-      const scheduledDate = new Date(data.scheduled_at);
+      const scheduledDate = createLocalDate(data.scheduled_at);
       if (isNaN(scheduledDate.getTime())) {
         throw new ValidationError('Invalid date format for scheduled_at');
       }
@@ -114,16 +115,16 @@ export class AppointmentService {
 
       if (start_date && end_date) {
         queryBuilder.andWhere('appointment.scheduled_at BETWEEN :start_date AND :end_date', {
-          start_date: new Date(start_date),
-          end_date: new Date(end_date)
+          start_date: createLocalDate(start_date),
+          end_date: createLocalDate(end_date)
         });
       } else if (start_date) {
         queryBuilder.andWhere('appointment.scheduled_at >= :start_date', {
-          start_date: new Date(start_date)
+          start_date: createLocalDate(start_date)
         });
       } else if (end_date) {
         queryBuilder.andWhere('appointment.scheduled_at <= :end_date', {
-          end_date: new Date(end_date)
+          end_date: createLocalDate(end_date)
         });
       }
 
@@ -168,7 +169,7 @@ export class AppointmentService {
       if (data.scheduled_at && data.scheduled_at !== appointment.scheduled_at.toISOString()) {
         const conflictingAppointment = await this.checkAvailability(
           appointment.professional_id,
-          new Date(data.scheduled_at),
+          createLocalDate(data.scheduled_at),
           data.duration_minutes || appointment.duration_minutes,
           appointmentId
         );
@@ -180,7 +181,7 @@ export class AppointmentService {
 
       const updateData = {
         ...data,
-        scheduled_at: data.scheduled_at ? new Date(data.scheduled_at) : undefined
+        scheduled_at: data.scheduled_at ? createLocalDate(data.scheduled_at) : undefined
       };
 
       await this.appointmentRepository.update(appointmentId, updateData);
@@ -260,7 +261,7 @@ export class AppointmentService {
       }
 
       // Validar nueva fecha
-      const newScheduledDate = new Date(data.new_scheduled_at);
+      const newScheduledDate = createLocalDate(data.new_scheduled_at);
       if (isNaN(newScheduledDate.getTime())) {
         throw new ValidationError('Invalid date format for new_scheduled_at');
       }
@@ -341,6 +342,38 @@ export class AppointmentService {
         throw error;
       }
       throw new InternalServerError('Error completing appointment');
+    }
+  }
+
+  async markAsNoShow(appointmentId: number): Promise<Appointment | null> {
+    try {
+      const appointment = await this.getAppointmentById(appointmentId);
+      if (!appointment) {
+        throw new NotFoundError('Appointment not found');
+      }
+
+      if (appointment.status === AppointmentStatus.CANCELLED) {
+        throw new BadRequestError('Cannot mark a cancelled appointment as no-show');
+      }
+
+      if (appointment.status === AppointmentStatus.COMPLETED) {
+        throw new BadRequestError('Cannot mark a completed appointment as no-show');
+      }
+
+      if (appointment.status === AppointmentStatus.NO_SHOW) {
+        throw new BadRequestError('Appointment is already marked as no-show');
+      }
+
+      await this.appointmentRepository.update(appointmentId, {
+        status: AppointmentStatus.NO_SHOW
+      });
+
+      return await this.getAppointmentById(appointmentId);
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new InternalServerError('Error marking appointment as no-show');
     }
   }
 

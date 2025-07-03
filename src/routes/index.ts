@@ -18,6 +18,7 @@ import availabilityExceptionRoutes from '../modules/availability-exception/avail
 import { paymentRoutes } from '../modules/payment/payment.routes';
 import timeSlotRoutes from '../modules/time-slot/time-slot.routes';
 import reviewRoutes from '../modules/review/review.routes';
+import { databaseCleanupRoutes } from '../modules/database-cleanup';
 
 const router = Router();
 
@@ -41,5 +42,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/payments', paymentRoutes);
 // Rutas de reseñas
 router.use('/reviews', reviewRoutes);
+// Rutas de limpieza de base de datos
+router.use('/database-cleanup', databaseCleanupRoutes);
 
 export default router;

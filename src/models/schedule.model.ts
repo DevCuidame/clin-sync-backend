@@ -40,6 +40,19 @@ export class Schedule {
   @Column({ type: 'date', nullable: true })
   valid_until?: Date;
 
+  // Campos para manejo de descansos
+  @Column({ default: false })
+  has_break!: boolean;
+
+  @Column({ type: 'time', nullable: true })
+  break_start_time?: string;
+
+  @Column({ type: 'time', nullable: true })
+  break_end_time?: string;
+
+  @Column({ length: 100, nullable: true })
+  break_description?: string;
+
   @CreateDateColumn()
   created_at!: Date;
 

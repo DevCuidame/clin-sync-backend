@@ -11,6 +11,7 @@ export interface CreateTimeSlotDto {
 }
 
 export interface UpdateTimeSlotDto {
+  professional_id: number;
   slot_date?: string;
   start_time?: string;
   end_time?: string;

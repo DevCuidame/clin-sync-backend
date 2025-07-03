@@ -314,6 +314,41 @@ export class AppointmentController {
     }
   }
 
+  async markAsNoShow(req: Request, res: Response): Promise<void> {
+    try {
+      const appointmentId = parseInt(req.params.id);
+      
+      if (isNaN(appointmentId)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid appointment ID'
+        });
+        return;
+      }
+
+      const appointment = await this.appointmentService.markAsNoShow(appointmentId);
+      
+      if (!appointment) {
+        res.status(404).json({
+          success: false,
+          message: 'Appointment not found'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Appointment marked as no-show successfully',
+        data: appointment
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Error marking appointment as no-show'
+      });
+    }
+  }
+
   async deleteAppointment(req: Request, res: Response): Promise<void> {
     try {
       const appointmentId = parseInt(req.params.id);

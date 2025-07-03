@@ -5,6 +5,7 @@ import { AvailabilityException, ExceptionType } from '../../models/availability-
 import { TimeSlot, SlotStatus } from '../../models/time-slot.model';
 import { Professional } from '../../models/professional.model';
 import { TimeSlotResponseDto } from './time-slot.interface';
+import { createLocalDate } from '../../utils/date-format';
 
 export class DynamicSlotService {
   private scheduleRepository: Repository<Schedule>;
@@ -71,7 +72,7 @@ export class DynamicSlotService {
   }
 
   private getDayOfWeek(date: string): DayOfWeek {
-    const dateObj = new Date(date);
+    const dateObj = createLocalDate(date);
     const dayIndex = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
     const dayMap: { [key: number]: DayOfWeek } = {
@@ -92,7 +93,7 @@ export class DynamicSlotService {
     dayOfWeek: DayOfWeek,
     date: string
   ): Promise<Schedule | null> {
-    const targetDate = new Date(date);
+    const targetDate = createLocalDate(date);
     
     return await this.scheduleRepository.findOne({
       where: {
@@ -107,7 +108,7 @@ export class DynamicSlotService {
     professionalId: number,
     date: string
   ): Promise<AvailabilityException[]> {
-    const targetDate = new Date(date);
+    const targetDate = createLocalDate(date);
     
     return await this.availabilityExceptionRepository.find({
       where: {
@@ -128,7 +129,7 @@ export class DynamicSlotService {
     professionalId: number,
     date: string
   ): Promise<TimeSlot[]> {
-    const targetDate = new Date(date);
+    const targetDate = createLocalDate(date);
     
     return await this.timeSlotRepository.find({
       where: {
@@ -152,6 +153,15 @@ export class DynamicSlotService {
     let currentTime = startTime;
     let slotId = 1000000; // ID temporal para slots virtuales
     
+    // Preparar información de descanso si está habilitado
+    let breakStartTime: number | null = null;
+    let breakEndTime: number | null = null;
+    
+    if (schedule.has_break && schedule.break_start_time && schedule.break_end_time) {
+      breakStartTime = this.parseTime(schedule.break_start_time);
+      breakEndTime = this.parseTime(schedule.break_end_time);
+    }
+    
     while (currentTime + duration <= endTime) {
       const slotStartTime = this.formatTime(currentTime);
       const slotEndTime = this.formatTime(currentTime + duration);
@@ -161,7 +171,13 @@ export class DynamicSlotService {
         slot.start_time === slotStartTime
       );
       
-      if (!existingSlot) {
+      // Verificar si el slot está dentro del período de descanso
+      const isInBreakTime = breakStartTime !== null && breakEndTime !== null && 
+        ((currentTime >= breakStartTime && currentTime < breakEndTime) || 
+         (currentTime + duration > breakStartTime && currentTime + duration <= breakEndTime) ||
+         (currentTime <= breakStartTime && currentTime + duration >= breakEndTime));
+      
+      if (!existingSlot && !isInBreakTime) {
         // Verificar si hay excepciones que afecten este horario
         const isBlocked = this.isTimeBlocked(
           slotStartTime,

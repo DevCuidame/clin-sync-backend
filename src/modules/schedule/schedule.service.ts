@@ -34,6 +34,11 @@ export class ScheduleService {
     this.validateTimeFormat(scheduleData.end_time);
     this.validateTimeRange(scheduleData.start_time, scheduleData.end_time);
 
+    // Validate break times if break is enabled
+    if (scheduleData.has_break) {
+      this.validateBreakTimes(scheduleData);
+    }
+
     // Check for overlapping schedules
     await this.checkForOverlappingSchedules(
       scheduleData.professional_id,
@@ -176,7 +181,21 @@ export class ScheduleService {
   async getSchedulesWithFilters(filters: ScheduleFilterDto): Promise<ScheduleResponseDto[]> {
     const queryBuilder = this.scheduleRepository.createQueryBuilder('schedule');
 
-    if (filters.professional_id) {
+    // Handle user_id filter by finding the corresponding professional_id
+    if (filters.user_id) {
+      const professional = await this.professionalRepository.findOne({
+        where: { user_id: filters.user_id }
+      });
+      
+      if (!professional) {
+        // If no professional found for this user_id, return empty array
+        return [];
+      }
+      
+      queryBuilder.andWhere('schedule.professional_id = :professionalId', {
+        professionalId: professional.professional_id
+      });
+    } else if (filters.professional_id) {
       queryBuilder.andWhere('schedule.professional_id = :professionalId', {
         professionalId: filters.professional_id
       });
@@ -230,6 +249,23 @@ export class ScheduleService {
       const startTime = updateData.start_time || existingSchedule.start_time;
       const endTime = updateData.end_time || existingSchedule.end_time;
       this.validateTimeRange(startTime, endTime);
+    }
+
+    // Validate break times if break is being enabled or modified
+    if (updateData.has_break === true || 
+        (existingSchedule.has_break && 
+         (updateData.break_start_time || updateData.break_end_time))) {
+      
+      // Prepare data for validation with existing values as fallbacks
+      const breakValidationData = {
+        ...updateData,
+        start_time: updateData.start_time || existingSchedule.start_time,
+        end_time: updateData.end_time || existingSchedule.end_time,
+        break_start_time: updateData.break_start_time || existingSchedule.break_start_time,
+        break_end_time: updateData.break_end_time || existingSchedule.break_end_time
+      };
+      
+      this.validateBreakTimes(breakValidationData);
     }
 
     // Check for overlapping schedules if relevant fields are being updated
@@ -301,6 +337,35 @@ export class ScheduleService {
     }
   }
 
+  private validateBreakTimes(scheduleData: CreateScheduleDto | UpdateScheduleDto): void {
+    if (!scheduleData.break_start_time || !scheduleData.break_end_time) {
+      throw new Error('Break start time and end time are required when has_break is true');
+    }
+
+    // Validate break time format
+    this.validateTimeFormat(scheduleData.break_start_time);
+    this.validateTimeFormat(scheduleData.break_end_time);
+
+    // Validate break time range
+    this.validateTimeRange(scheduleData.break_start_time, scheduleData.break_end_time);
+
+    // Get schedule times (for update operations, we need to handle existing values)
+    const scheduleStart = (scheduleData as any).start_time;
+    const scheduleEnd = (scheduleData as any).end_time;
+
+    if (scheduleStart && scheduleEnd) {
+      // Validate that break is within schedule hours
+      const scheduleStartTime = new Date(`1970-01-01T${scheduleStart}:00`);
+      const scheduleEndTime = new Date(`1970-01-01T${scheduleEnd}:00`);
+      const breakStartTime = new Date(`1970-01-01T${scheduleData.break_start_time}:00`);
+      const breakEndTime = new Date(`1970-01-01T${scheduleData.break_end_time}:00`);
+
+      if (breakStartTime < scheduleStartTime || breakEndTime > scheduleEndTime) {
+        throw new Error('Break time must be within schedule hours');
+      }
+    }
+  }
+
   private async checkForOverlappingSchedules(
     professionalId: number,
     dayOfWeek: DayOfWeek,
@@ -363,6 +428,11 @@ export class ScheduleService {
       is_active: schedule.is_active,
       valid_from: schedule.valid_from ? schedule.valid_from.toISOString().split('T')[0] : undefined,
       valid_until: schedule.valid_until ? schedule.valid_until.toISOString().split('T')[0] : undefined,
+      // Campos de descanso
+      has_break: schedule.has_break || false,
+      break_start_time: schedule.break_start_time,
+      break_end_time: schedule.break_end_time,
+      break_description: schedule.break_description,
       created_at: schedule.created_at.toISOString()
     };
   }

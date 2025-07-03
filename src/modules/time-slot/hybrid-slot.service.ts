@@ -3,6 +3,7 @@ import { DynamicSlotService } from './dynamic-slot.service';
 import { CreateTimeSlotDto, TimeSlotFilterDto, TimeSlotResponseDto } from './time-slot.interface';
 import { SlotStatus } from '../../models/time-slot.model';
 import { HybridSlotConfig, HybridSlotConfigFactory } from './hybrid-slot.config';
+import { createLocalDate } from '../../utils/date-format';
 
 export interface HybridSlotOptions {
   defaultDuration?: number;
@@ -143,8 +144,8 @@ export class HybridSlotService {
     maxSlots: number
   ): Promise<TimeSlotResponseDto[]> {
     const slots: TimeSlotResponseDto[] = [];
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : new Date(startDate);
+    const start = createLocalDate(startDate);
+    const end = endDate ? createLocalDate(endDate) : createLocalDate(startDate);
 
     // Asegurar que no generemos más de maxSlots
     let currentDate = new Date(start);
@@ -269,8 +270,8 @@ export class HybridSlotService {
     let errors = 0;
 
     try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = createLocalDate(startDate);
+      const end = createLocalDate(endDate);
       let currentDate = new Date(start);
 
       while (currentDate <= end) {
