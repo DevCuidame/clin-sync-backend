@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Unique } from 'typeorm';
 import { User } from './user.model';
 import { Role } from './role.model';
 
 @Entity('user_roles')
+@Unique(['user_id', 'role_id'])
 export class UserRole {
   @PrimaryGeneratedColumn('increment')
   user_role_id!: number;

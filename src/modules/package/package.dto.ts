@@ -8,6 +8,7 @@ export interface CreatePackageDto {
   is_active?: boolean;
   terms_conditions?: string;
   image_url?: string;
+  image_base64?: string; // Para recibir imagen en formato base64
 }
 
 export interface UpdatePackageDto {
@@ -20,6 +21,7 @@ export interface UpdatePackageDto {
   is_active?: boolean;
   terms_conditions?: string;
   image_url?: string;
+  image_base64?: string; // Para recibir imagen en formato base64
 }
 
 export interface PackageResponseDto {

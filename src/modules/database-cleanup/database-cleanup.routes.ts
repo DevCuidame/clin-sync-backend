@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { DatabaseCleanupController } from './database-cleanup.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
-import { restrictTo } from '@middlewares/role.middleware';
+import { restrictTo } from '../../middlewares/role.middleware';
 
 const router = Router();
 const cleanupController = new DatabaseCleanupController();

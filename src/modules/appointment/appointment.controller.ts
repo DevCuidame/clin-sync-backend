@@ -162,6 +162,7 @@ export class AppointmentController {
         return;
       }
 
+      console.log("🚀 ~ AppointmentController ~ cancelAppointment ~ req.body:", req.body)
       const dto = plainToClass(CancelAppointmentDto, req.body);
       const errors = await validate(dto);
 
@@ -387,6 +388,8 @@ export class AppointmentController {
     try {
       const userId = parseInt(req.params.userId);
       const days = parseInt(req.query.days as string) || 7;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
       
       if (isNaN(userId)) {
         res.status(400).json({
@@ -396,17 +399,51 @@ export class AppointmentController {
         return;
       }
 
-      const appointments = await this.appointmentService.getUpcomingAppointments(userId, days);
+      const result = await this.appointmentService.getUpcomingAppointments(userId, days, page, limit);
       
       res.status(200).json({
         success: true,
         message: 'Upcoming appointments retrieved successfully',
-        data: appointments
+        data: result.appointments,
+        pagination: {
+          total: result.total,
+          page: page,
+          limit: limit,
+          totalPages: Math.ceil(result.total / limit)
+        }
       });
     } catch (error: any) {
       res.status(500).json({
         success: false,
         message: error.message || 'Error fetching upcoming appointments'
+      });
+    }
+  }
+
+  async getUpcomingAppointmentsByProfessional(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id; // ID del usuario autenticado
+      const days = parseInt(req.query.days as string) || 7;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      const result = await this.appointmentService.getUpcomingAppointmentsByProfessional(userId, days, page, limit);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Professional upcoming appointments retrieved successfully',
+        data: result.appointments,
+        pagination: {
+          total: result.total,
+          page: page,
+          limit: limit,
+          totalPages: Math.ceil(result.total / limit)
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Error fetching professional upcoming appointments'
       });
     }
   }

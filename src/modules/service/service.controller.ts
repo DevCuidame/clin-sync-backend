@@ -126,4 +126,23 @@ export class ServiceController {
       });
     }
   }
+
+  async toggleServiceStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const service = await this.serviceService.toggleServiceStatus(parseInt(id));
+      
+      res.status(200).json({
+        success: true,
+        data: service,
+        message: `Servicio ${service.is_active ? 'activado' : 'desactivado'} exitosamente`
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error al cambiar el estado del servicio',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
 }

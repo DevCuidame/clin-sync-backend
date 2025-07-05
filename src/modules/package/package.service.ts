@@ -2,13 +2,20 @@ import { Repository } from 'typeorm';
 import { AppDataSource } from '../../core/config/database';
 import { Package } from '../../models/package.model';
 import { Purchase } from '../../models/purchase.model';
+import { Service } from '../../models/service.model';
+import { PackageService as PackageServiceModel } from '../../models/package-service.model';
 import { CreatePackageDto, UpdatePackageDto, PackageResponseDto } from './package.dto';
+import { FileUploadService } from '../../utils/file-upload.util';
 
 export class PackageService {
   private packageRepository: Repository<Package>;
+  private packageServiceRepository: Repository<PackageServiceModel>;
+  private serviceRepository: Repository<Service>;
 
   constructor() {
     this.packageRepository = AppDataSource.getRepository(Package);
+    this.packageServiceRepository = AppDataSource.getRepository(PackageServiceModel);
+    this.serviceRepository = AppDataSource.getRepository(Service);
   }
 
   async createPackage(packageData: CreatePackageDto): Promise<PackageResponseDto> {
@@ -75,6 +82,25 @@ export class PackageService {
   }
 
   async deletePackage(packageId: number): Promise<boolean> {
+    // Obtener el paquete antes de eliminarlo para acceder a la imagen
+    const packageToDelete = await this.packageRepository.findOne({
+      where: { package_id: packageId }
+    });
+    
+    if (!packageToDelete) {
+      return false;
+    }
+    
+    // Eliminar la imagen asociada si existe
+    if (packageToDelete.image_url) {
+      try {
+        await FileUploadService.deleteFile(packageToDelete.image_url);
+      } catch (error) {
+        console.warn('Error al eliminar imagen del paquete:', error);
+        // Continuar con la eliminación del paquete aunque falle la eliminación de la imagen
+      }
+    }
+    
     const result = await this.packageRepository.delete({ package_id: packageId });
     return result.affected !== null && result.affected !== undefined && result.affected > 0;
   }
@@ -131,6 +157,36 @@ export class PackageService {
       expires_at: purchase.expires_at,
       package: this.mapToResponseDto(purchase.package)
     }));
+  }
+
+  async getAllPackagesWithServices(): Promise<any[]> {
+    // Consulta optimizada usando una sola query con joins
+    const packagesWithRelations = await this.packageRepository
+      .createQueryBuilder('package')
+      .leftJoinAndSelect('package.packageServices', 'ps')
+      .leftJoinAndSelect('ps.service', 'service')
+      .orderBy('package.created_at', 'DESC')
+      .addOrderBy('service.service_name', 'ASC')
+      .getMany();
+
+    // Mapear los resultados al formato deseado
+    return packagesWithRelations.map(pkg => {
+      const services = pkg.packageServices?.map(ps => ({
+        service_id: ps.service.service_id,
+        service_name: ps.service.service_name,
+        description: ps.service.description,
+        base_price: ps.service.base_price,
+        duration_minutes: ps.service.duration_minutes,
+        category: ps.service.category,
+        sessions_included: ps.sessions_included
+      })) || [];
+
+      return {
+        ...this.mapToResponseDto(pkg),
+        services: services,
+        total_services: services.length
+      };
+    });
   }
 
   private mapToResponseDto(packageData: Package): PackageResponseDto {

@@ -85,6 +85,17 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
     throw new UnauthorizedError('Debe verificar su correo electrónico antes de iniciar sesión');
   }
 
+  // Verificar que el usuario esté activo
+  if (user.status !== 'active') {
+    const statusMessages = {
+      'inactive': 'Su cuenta ha sido desactivada. Contacte al administrador.',
+      'suspended': 'Su cuenta ha sido suspendida. Contacte al administrador.',
+      'pending': 'Su cuenta está pendiente de activación. Contacte al administrador.'
+    };
+    const message = statusMessages[user.status as keyof typeof statusMessages] || 'Su cuenta no está disponible para iniciar sesión.';
+    throw new UnauthorizedError(message);
+  }
+
   const message = 'Sesión iniciada exitosamente';
 
   // Generar token JWT
@@ -593,10 +604,10 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
    * @returns Token JWT
    */
   private async generateToken(user: User): Promise<string> {
-    // Obtener el rol del usuario
+    // Obtener el rol activo del usuario
     const userRoleRepository = AppDataSource.getRepository(UserRole);
     const userRole = await userRoleRepository.findOne({
-      where: { user_id: user.id },
+      where: { user_id: user.id, is_active: true },
       relations: ['role']
     });
 
@@ -604,7 +615,7 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
       id: user.id,
       email: user.email,
       name: user.first_name,
-      role: userRole?.role?.role_name || 'User'
+      role: userRole?.role?.role_name || 'usuario'
     };
 
     // @ts-ignore - Forzar a TypeScript a ignorar este error específico

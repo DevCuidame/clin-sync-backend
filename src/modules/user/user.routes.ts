@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { UserController } from './user.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import { validateDto } from '../../middlewares/validator.middleware';
-import { UpdatePasswordDto, UpdateUserDto } from './user.dto';
+import { UpdatePasswordDto, UpdateUserDto, UpdateUserStatusDto } from './user.dto';
 import { restrictTo } from '../../middlewares/role.middleware';
 
 const router = Router();
@@ -85,22 +85,41 @@ router.get('/', userController.getUsers);
 router.get('/:id', userController.getUserById);
 
 /**
- * @route POST /api/users/:id/roles/:roleId
- * @desc Assign role to user
+ * @route PUT /api/users/:id/role/:roleId
+ * @desc Update user role (replaces current role)
  * @access Private (Admin only)
  */
-router.post('/:id/roles/:roleId', userController.assignRole);
+router.put('/:id/role/:roleId', userController.assignRole);
 
 /**
- * @route DELETE /api/users/:id/roles/:roleId
- * @desc Remove role from user
+ * @route DELETE /api/users/:id/role
+ * @desc Remove current role from user
  * @access Private (Admin only)
  */
-router.delete('/:id/roles/:roleId', userController.removeRole);
+router.delete('/:id/role', userController.removeRole);
+
+/**
+ * @route PUT /api/users/:id/activate
+ * @desc Activate a user
+ * @access Private (Admin only)
+ */
+router.put('/:id/activate', userController.activateUser);
+
+/**
+ * @route PUT /api/users/:id/deactivate
+ * @desc Deactivate a user
+ * @access Private (Admin only)
+ */
+router.put('/:id/deactivate', userController.deactivateUser);
+
+/**
+ * @route PUT /api/users/:id/status
+ * @desc Update user status
+ * @access Private (Admin only)
+ */
+router.put('/:id/status', validateDto(UpdateUserStatusDto), userController.updateUserStatus);
 
 // Información completa de cualquier usuario (solo admin)
 router.get('/:id/complete-info', userController.getUserCompleteInfoById);
-
-
 
 export default router;

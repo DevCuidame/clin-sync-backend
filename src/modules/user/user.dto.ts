@@ -159,3 +159,12 @@ export class UpdatePasswordDto {
   })
   confirmPassword!: string;
 }
+
+export class UpdateUserStatusDto {
+  @IsNotEmpty({ message: 'El estado es requerido' })
+  @IsString({ message: 'El estado debe ser una cadena de texto' })
+  @Matches(/^(active|inactive|suspended|pending)$/, {
+    message: 'El estado debe ser uno de: active, inactive, suspended, pending',
+  })
+  status!: string;
+}

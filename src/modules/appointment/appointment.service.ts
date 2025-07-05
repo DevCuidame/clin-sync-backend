@@ -389,25 +389,74 @@ export class AppointmentService {
     }
   }
 
-  async getUpcomingAppointments(userId: number, days: number = 7): Promise<Appointment[]> {
+  async getUpcomingAppointments(userId: number, days: number = 7, page: number = 1, limit: number = 10): Promise<{ appointments: Appointment[], total: number }> {
     try {
       const startDate = new Date();
       const endDate = new Date();
       endDate.setDate(startDate.getDate() + days);
+      const skip = (page - 1) * limit;
 
-      return await this.appointmentRepository.find({
-        where: {
-          user_id: userId,
-          scheduled_at: Between(startDate, endDate),
-          status: AppointmentStatus.SCHEDULED || AppointmentStatus.CONFIRMED
-        },
-        order: { scheduled_at: 'ASC' }
-      });
+      const queryBuilder = this.appointmentRepository.createQueryBuilder('appointment')
+        .leftJoinAndSelect('appointment.user', 'user')
+        .leftJoinAndSelect('appointment.professional', 'professional')
+        .leftJoinAndSelect('professional.user', 'professionalUser')
+        .leftJoinAndSelect('appointment.service', 'service')
+        .leftJoinAndSelect('appointment.user_session', 'user_session')
+        .where('appointment.user_id = :userId', { userId })
+        .andWhere('appointment.scheduled_at BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .andWhere('appointment.status IN (:...statuses)', { statuses: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED] })
+        .orderBy('appointment.scheduled_at', 'ASC')
+        .skip(skip)
+        .take(limit);
+
+      const [appointments, total] = await queryBuilder.getManyAndCount();
+
+      return { appointments, total };
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
       throw new InternalServerError('Error fetching upcoming appointments');
+    }
+  }
+
+  async getUpcomingAppointmentsByProfessional(userId: number, days: number = 7, page: number = 1, limit: number = 10): Promise<{ appointments: Appointment[], total: number }> {
+    try {
+      // Primero buscar el profesional por el ID del usuario
+      const professional = await this.professionalRepository.findOne({
+        where: { user_id: userId }
+      });
+
+      if (!professional) {
+        throw new NotFoundError('Professional not found for this user');
+      }
+
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(startDate.getDate() + days);
+      const skip = (page - 1) * limit;
+
+      const queryBuilder = this.appointmentRepository.createQueryBuilder('appointment')
+        .leftJoinAndSelect('appointment.user', 'user')
+        .leftJoinAndSelect('appointment.professional', 'professional')
+        .leftJoinAndSelect('professional.user', 'professionalUser')
+        .leftJoinAndSelect('appointment.service', 'service')
+        .leftJoinAndSelect('appointment.user_session', 'user_session')
+        .where('appointment.professional_id = :professionalId', { professionalId: professional.professional_id })
+        .andWhere('appointment.scheduled_at BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .andWhere('appointment.status IN (:...statuses)', { statuses: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED] })
+        .orderBy('appointment.scheduled_at', 'ASC')
+        .skip(skip)
+        .take(limit);
+
+      const [appointments, total] = await queryBuilder.getManyAndCount();
+
+      return { appointments, total };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new InternalServerError('Error fetching professional upcoming appointments');
     }
   }
 

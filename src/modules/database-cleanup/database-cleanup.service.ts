@@ -6,7 +6,6 @@ import { AppDataSource } from '../../core/config/database';
 
 export interface CleanupResult {
   deletedTimeSlots: number;
-  deletedAppointments: number;
   errors: string[];
 }
 
@@ -26,7 +25,7 @@ export class DatabaseCleanupService {
   }
 
   /**
-   * Ejecuta la limpieza completa de la base de datos
+   * Ejecuta la limpieza de time slots de la base de datos
    */
   async performCleanup(options: CleanupOptions = {}): Promise<CleanupResult> {
     const {
@@ -35,26 +34,20 @@ export class DatabaseCleanupService {
       batchSize = 100
     } = options;
 
-    logger.info(`Iniciando limpieza de base de datos - DryRun: ${dryRun}, DaysBack: ${daysBack}`);
+    logger.info(`Iniciando limpieza de time slots - DryRun: ${dryRun}, DaysBack: ${daysBack}`);
 
     const result: CleanupResult = {
       deletedTimeSlots: 0,
-      deletedAppointments: 0,
       errors: []
     };
 
     try {
-      // Limpiar time slots pasados
+      // Limpiar solo time slots pasados
       const timeSlotsResult = await this.cleanupPastTimeSlots(daysBack, dryRun, batchSize);
       result.deletedTimeSlots = timeSlotsResult.deleted;
       result.errors.push(...timeSlotsResult.errors);
 
-      // Limpiar appointments pasadas
-      const appointmentsResult = await this.cleanupPastAppointments(daysBack, dryRun, batchSize);
-      result.deletedAppointments = appointmentsResult.deleted;
-      result.errors.push(...appointmentsResult.errors);
-
-      logger.info(`Limpieza completada - TimeSlots: ${result.deletedTimeSlots}, Appointments: ${result.deletedAppointments}`);
+      logger.info(`Limpieza completada - TimeSlots eliminados: ${result.deletedTimeSlots}`);
     } catch (error) {
       const errorMessage = `Error durante la limpieza: ${error instanceof Error ? error.message : 'Error desconocido'}`;
       logger.error(errorMessage);
@@ -198,11 +191,10 @@ export class DatabaseCleanupService {
   }
 
   /**
-   * Obtiene estadísticas de elementos que serían eliminados
+   * Obtiene estadísticas de time slots que serían eliminados
    */
   async getCleanupStats(daysBack: number = 0): Promise<{
     timeSlotsToDelete: number;
-    appointmentsToDelete: number;
   }> {
     const cutoffDate = this.calculateCutoffDate(daysBack);
 
@@ -214,17 +206,8 @@ export class DatabaseCleanupService {
       })
       .getCount();
 
-    const appointmentsToDelete = await this.appointmentRepository
-      .createQueryBuilder('app')
-      .where('app.scheduled_at < :cutoffDate', { cutoffDate })
-      .andWhere('app.status IN (:...statuses)', { 
-        statuses: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] 
-      })
-      .getCount();
-
     return {
-      timeSlotsToDelete,
-      appointmentsToDelete
+      timeSlotsToDelete
     };
   }
 }

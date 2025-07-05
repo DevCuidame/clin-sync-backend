@@ -197,6 +197,147 @@ export class PurchaseController {
     }
   };
 
+  /**
+   * Confirmar pago en efectivo - Método específico para administradores
+   */
+  confirmCashPayment = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { admin_notes } = req.body;
+      
+      // Verificar que la compra existe y es un pago en efectivo
+      const purchase = await this.purchaseService.getPurchaseById(parseInt(id));
+      
+      if (!purchase) {
+        res.status(404).json({
+          success: false,
+          message: 'Compra no encontrada'
+        });
+        return;
+      }
+      
+      if (purchase.payment_method !== 'CASH') {
+        res.status(400).json({
+          success: false,
+          message: 'Esta compra no es un pago en efectivo'
+        });
+        return;
+      }
+      
+      if (purchase.payment_status === 'completed') {
+        res.status(400).json({
+          success: false,
+          message: 'Este pago ya ha sido confirmado'
+        });
+        return;
+      }
+      
+      // Confirmar el pago actualizando el estado a 'completed'
+      const confirmedPurchase = await this.purchaseService.confirmCashPayment(parseInt(id), admin_notes);
+      
+      if (!confirmedPurchase) {
+        res.status(400).json({
+          success: false,
+          message: 'Error al confirmar el pago en efectivo'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Pago en efectivo confirmado exitosamente',
+        data: confirmedPurchase
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error confirmando pago en efectivo',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Rechazar pago en efectivo - Método específico para administradores
+   */
+  rejectCashPayment = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { rejection_reason } = req.body;
+      
+      // Verificar que la compra existe y es un pago en efectivo
+      const purchase = await this.purchaseService.getPurchaseById(parseInt(id));
+      
+      if (!purchase) {
+        res.status(404).json({
+          success: false,
+          message: 'Compra no encontrada'
+        });
+        return;
+      }
+      
+      if (purchase.payment_method !== 'CASH') {
+        res.status(400).json({
+          success: false,
+          message: 'Esta compra no es un pago en efectivo'
+        });
+        return;
+      }
+      
+      if (purchase.payment_status !== 'pending') {
+        res.status(400).json({
+          success: false,
+          message: 'Solo se pueden rechazar pagos pendientes'
+        });
+        return;
+      }
+      
+      // Rechazar el pago actualizando el estado a 'failed'
+      const rejectedPurchase = await this.purchaseService.rejectCashPayment(parseInt(id), rejection_reason);
+      
+      if (!rejectedPurchase) {
+        res.status(500).json({
+          success: false,
+          message: 'Error al rechazar el pago en efectivo'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Pago en efectivo rechazado',
+        data: rejectedPurchase
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error rechazando pago en efectivo',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  /**
+   * Obtener pagos en efectivo pendientes de confirmación
+   */
+  getPendingCashPayments = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const pendingCashPayments = await this.purchaseService.getPendingCashPayments();
+      
+      res.status(200).json({
+        success: true,
+        message: 'Pagos en efectivo pendientes obtenidos exitosamente',
+        data: pendingCashPayments
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error obteniendo pagos en efectivo pendientes',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
   getActivePurchases = async (req: Request, res: Response): Promise<void> => {
     try {
       const { userId } = req.params;

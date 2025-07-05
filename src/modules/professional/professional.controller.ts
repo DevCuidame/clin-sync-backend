@@ -106,4 +106,39 @@ export class ProfessionalController {
       });
     }
   }
+
+  async getProfessionalCompleteInfoByUserId(req: Request, res: Response): Promise<void> {
+    try {
+      const { user_id } = req.params;
+      
+      if (!user_id) {
+        res.status(400).json({
+          success: false,
+          message: 'user_id es requerido'
+        });
+        return;
+      }
+
+      const completeInfo = await this.professionalService.getProfessionalCompleteInfoByUserId(parseInt(user_id));
+      
+      if (!completeInfo) {
+        res.status(404).json({
+          success: false,
+          message: 'Professional not found for this user'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: completeInfo
+      });
+    } catch (error) {
+      console.error('Error getting professional complete info:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
 }

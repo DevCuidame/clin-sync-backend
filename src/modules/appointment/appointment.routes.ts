@@ -13,6 +13,7 @@ router.use(authMiddleware);
 router.post('/', appointmentController.createAppointment.bind(appointmentController));
 router.get('/', appointmentController.getAppointments.bind(appointmentController));
 router.get('/upcoming/:userId', appointmentController.getUpcomingAppointments.bind(appointmentController));
+router.get('/upcoming-professional', appointmentController.getUpcomingAppointmentsByProfessional.bind(appointmentController));
 router.get('/:id', appointmentController.getAppointmentById.bind(appointmentController));
 router.put('/:id', appointmentController.updateAppointment.bind(appointmentController));
 router.patch('/:id/cancel', appointmentController.cancelAppointment.bind(appointmentController));

@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import * as cron from 'node-cron';
 import { DatabaseCleanupService } from './database-cleanup.service';
 import logger  from '../../utils/logger';
 
@@ -21,16 +21,15 @@ export class DatabaseCleanupScheduler {
       return;
     }
 
-    logger.info(`Iniciando scheduler de limpieza de base de datos con expresión cron: ${cronExpression}`);
+    logger.info(`Iniciando scheduler de limpieza de time slots con expresión cron: ${cronExpression}`);
 
     this.cronJob = cron.schedule(cronExpression, async () => {
       await this.executeScheduledCleanup();
     }, {
-      scheduled: true,
       timezone: 'America/Bogota' // Ajustar según la zona horaria del proyecto
     });
 
-    logger.info('Scheduler de limpieza de base de datos iniciado exitosamente');
+    logger.info('Scheduler de limpieza de time slots iniciado exitosamente');
   }
 
   /**
@@ -40,7 +39,7 @@ export class DatabaseCleanupScheduler {
     if (this.cronJob) {
       this.cronJob.stop();
       this.cronJob = null;
-      logger.info('Scheduler de limpieza de base de datos detenido');
+      logger.info('Scheduler de limpieza de time slots detenido');
     }
   }
 
@@ -57,7 +56,7 @@ export class DatabaseCleanupScheduler {
     const startTime = new Date();
 
     try {
-      logger.info('Iniciando limpieza programada de base de datos');
+      logger.info('Iniciando limpieza programada de time slots');
 
       // Configuración por defecto para limpieza nocturna
       const cleanupOptions = {
@@ -72,8 +71,6 @@ export class DatabaseCleanupScheduler {
       
       logger.info(`Limpieza programada completada en ${duration}ms`, {
         deletedTimeSlots: result.deletedTimeSlots,
-        deletedAppointments: result.deletedAppointments,
-        totalDeleted: result.deletedTimeSlots + result.deletedAppointments,
         errors: result.errors.length,
         duration
       });
@@ -111,12 +108,10 @@ export class DatabaseCleanupScheduler {
   getStatus(): {
     isSchedulerRunning: boolean;
     isCleanupInProgress: boolean;
-    nextExecution?: Date;
   } {
     return {
       isSchedulerRunning: this.isSchedulerRunning(),
-      isCleanupInProgress: this.isCleanupInProgress(),
-      nextExecution: this.cronJob ? new Date(this.cronJob.nextDate().toISOString()) : undefined
+      isCleanupInProgress: this.isCleanupInProgress()
     };
   }
 
@@ -132,7 +127,7 @@ export class DatabaseCleanupScheduler {
       throw new Error('Ya hay una limpieza en progreso');
     }
 
-    logger.info('Ejecutando limpieza manual de base de datos');
+    logger.info('Ejecutando limpieza manual de time slots');
     
     const cleanupOptions = {
       daysBack: options?.daysBack || 0,

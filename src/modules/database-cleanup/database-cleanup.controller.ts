@@ -47,12 +47,10 @@ export class DatabaseCleanupController {
       res.status(statusCode).json({
         success: result.errors.length === 0,
         message: result.errors.length === 0 
-          ? 'Limpieza completada exitosamente'
-          : 'Limpieza completada con algunos errores',
+          ? 'Limpieza de time slots completada exitosamente'
+          : 'Limpieza de time slots completada con algunos errores',
         data: {
           deletedTimeSlots: result.deletedTimeSlots,
-          deletedAppointments: result.deletedAppointments,
-          totalDeleted: result.deletedTimeSlots + result.deletedAppointments,
           errors: result.errors,
           options
         }
@@ -91,7 +89,6 @@ export class DatabaseCleanupController {
         message: 'Estadísticas obtenidas exitosamente',
         data: {
           ...stats,
-          totalToDelete: stats.timeSlotsToDelete + stats.appointmentsToDelete,
           daysBack,
           cutoffDate: this.calculateCutoffDate(daysBack).toISOString()
         }
@@ -133,11 +130,9 @@ export class DatabaseCleanupController {
 
       res.status(200).json({
         success: true,
-        message: 'Simulación de limpieza completada',
+        message: 'Simulación de limpieza de time slots completada',
         data: {
           wouldDeleteTimeSlots: result.deletedTimeSlots,
-          wouldDeleteAppointments: result.deletedAppointments,
-          totalWouldDelete: result.deletedTimeSlots + result.deletedAppointments,
           errors: result.errors,
           options
         }

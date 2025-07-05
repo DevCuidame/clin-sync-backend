@@ -202,43 +202,77 @@ export class UserService {
    * Asignar un rol a un usuario
    * @param userId ID del usuario
    * @param roleId ID del rol
+   * @param currentUserId ID del usuario que realiza la acción
    * @returns Confirmación de asignación
    */
   async assignRole(
     userId: number,
-    roleId: number
+    roleId: number,
+    currentUserId?: number
   ): Promise<{ success: boolean; message: string }> {
     // Comprobar si el usuario existe
     await this.getUserById(userId);
 
-    // Asignar rol
-    // await this.userRepository.assignRole(userId, roleId);
+    // Verificar que los administradores no puedan cambiar su propio rol
+    if (currentUserId && currentUserId === userId) {
+      // Verificar si el usuario actual es administrador
+      const currentUser = await this.userRepository.findById(currentUserId, {
+        relations: ['user_roles', 'user_roles.role']
+      });
+      
+      const isAdmin = currentUser?.user_roles?.some(
+        userRole => userRole.role?.role_name === 'admin' && userRole.is_active
+      );
+      
+      if (isAdmin) {
+        throw new BadRequestError('Los administradores no pueden cambiar su propio rol');
+      }
+    }
 
+    // Actualizar rol del usuario (reemplazar rol existente)
+    const result = await this.userRepository.updateUserRole(userId, roleId);
+    
     return {
       success: true,
-      message: 'Rol asignado correctamente',
+      message: result.isNewRole ? 'Rol asignado correctamente' : 'Rol actualizado correctamente',
     };
   }
 
   /**
-   * Quitar un rol a un usuario
+   * Quitar el rol actual de un usuario
    * @param userId ID del usuario
-   * @param roleId ID del rol
+   * @param currentUserId ID del usuario que realiza la acción
    * @returns Confirmación de eliminación
    */
   async removeRole(
     userId: number,
-    roleId: number
+    currentUserId?: number
   ): Promise<{ success: boolean; message: string }> {
     // Comprobar si el usuario existe
     await this.getUserById(userId);
 
-    // Eliminar rol
-    // const result = await this.userRepository.removeRole(userId, roleId);
+    // Verificar que los administradores no puedan eliminar su propio rol
+    if (currentUserId && currentUserId === userId) {
+      // Verificar si el usuario actual es administrador
+      const currentUser = await this.userRepository.findById(currentUserId, {
+        relations: ['user_roles', 'user_roles.role']
+      });
+      
+      const isAdmin = currentUser?.user_roles?.some(
+        userRole => userRole.role?.role_name === 'admin' && userRole.is_active
+      );
+      
+      if (isAdmin) {
+        throw new BadRequestError('Los administradores no pueden eliminar su propio rol');
+      }
+    }
 
-    // if (!result) {
-    //   throw new NotFoundError('Rol no encontrado para este usuario');
-    // }
+    // Eliminar todos los roles activos del usuario
+    const result = await this.userRepository.removeAllUserRoles(userId);
+
+    if (!result) {
+      throw new NotFoundError('No se encontraron roles activos para este usuario');
+    }
 
     return {
       success: true,
@@ -459,6 +493,108 @@ export class UserService {
     };
   }
 
+
+  /**
+   * Activar un usuario
+   * @param userId ID del usuario a activar
+   * @param currentUserId ID del usuario que realiza la acción
+   * @returns Confirmación de activación
+   */
+  async activateUser(
+    userId: number,
+    currentUserId?: number
+  ): Promise<{ success: boolean; message: string; user: User }> {
+    // Comprobar si el usuario existe
+    const user = await this.getUserById(userId);
+
+    // Verificar que el usuario no esté ya activo
+    if (user.status === 'active') {
+      throw new BadRequestError('El usuario ya está activo');
+    }
+
+    // Activar usuario
+    const updatedUser = await this.userRepository.activateUser(userId);
+
+    return {
+      success: true,
+      message: 'Usuario activado correctamente',
+      user: updatedUser,
+    };
+  }
+
+  /**
+   * Desactivar un usuario
+   * @param userId ID del usuario a desactivar
+   * @param currentUserId ID del usuario que realiza la acción
+   * @returns Confirmación de desactivación
+   */
+  async deactivateUser(
+    userId: number,
+    currentUserId?: number
+  ): Promise<{ success: boolean; message: string; user: User }> {
+    // Comprobar si el usuario existe
+    const user = await this.getUserById(userId);
+
+    // Verificar que no sea el mismo usuario intentando desactivarse
+    if (currentUserId && currentUserId === userId) {
+      throw new BadRequestError('No puedes desactivar tu propia cuenta');
+    }
+
+    // Verificar que el usuario no esté ya inactivo
+    if (user.status === 'inactive') {
+      throw new BadRequestError('El usuario ya está inactivo');
+    }
+
+    // Desactivar usuario
+    const updatedUser = await this.userRepository.deactivateUser(userId);
+
+    return {
+      success: true,
+      message: 'Usuario desactivado correctamente',
+      user: updatedUser,
+    };
+  }
+
+  /**
+   * Cambiar el estado de un usuario
+   * @param userId ID del usuario
+   * @param status Nuevo estado del usuario
+   * @param currentUserId ID del usuario que realiza la acción
+   * @returns Confirmación del cambio de estado
+   */
+  async updateUserStatus(
+    userId: number,
+    status: string,
+    currentUserId?: number
+  ): Promise<{ success: boolean; message: string; user: User }> {
+    // Comprobar si el usuario existe
+    const user = await this.getUserById(userId);
+
+    // Validar que el estado sea válido
+    const validStatuses = ['active', 'inactive', 'suspended', 'pending'];
+    if (!validStatuses.includes(status)) {
+      throw new BadRequestError(`Estado inválido. Estados válidos: ${validStatuses.join(', ')}`);
+    }
+
+    // Verificar que no sea el mismo usuario intentando cambiar su estado a inactivo o suspendido
+    if (currentUserId && currentUserId === userId && ['inactive', 'suspended'].includes(status)) {
+      throw new BadRequestError('No puedes cambiar tu propio estado a inactivo o suspendido');
+    }
+
+    // Verificar que el estado sea diferente al actual
+    if (user.status === status) {
+      throw new BadRequestError(`El usuario ya tiene el estado: ${status}`);
+    }
+
+    // Actualizar estado del usuario
+    const updatedUser = await this.userRepository.updateUserStatus(userId, status);
+
+    return {
+      success: true,
+      message: `Estado del usuario actualizado a: ${status}`,
+      user: updatedUser,
+    };
+  }
 
 /**
  * Obtener información completa de todos los usuarios con paginación

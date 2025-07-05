@@ -32,4 +32,9 @@ router.post('/sessions/detect-and-create-missing', purchaseController.detectAndC
 // Payment status update route
 router.patch('/:id/payment-status', purchaseController.updatePaymentStatus);
 
+// Cash payment management routes (admin only)
+router.post('/:id/confirm-cash', purchaseController.confirmCashPayment);
+router.post('/:id/reject-cash', purchaseController.rejectCashPayment);
+router.get('/cash/pending', purchaseController.getPendingCashPayments);
+
 export default router;

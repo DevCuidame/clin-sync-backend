@@ -271,8 +271,9 @@ export class UserController {
     try {
       const userId = parseInt(req.params.id);
       const roleId = parseInt(req.params.roleId);
+      const currentUserId = req.user?.id;
 
-      const result = await this.userService.assignRole(userId, roleId);
+      const result = await this.userService.assignRole(userId, roleId, currentUserId);
 
       const response: ApiResponse = {
         success: result.success,
@@ -287,8 +288,8 @@ export class UserController {
   };
 
   /**
-   * Eliminar un rol de un usuario (solo administradores)
-   * @route DELETE /api/users/:id/roles/:roleId
+   * Eliminar el rol actual de un usuario (solo administradores)
+   * @route DELETE /api/users/:id/role
    */
   removeRole = async (
     req: Request,
@@ -297,9 +298,9 @@ export class UserController {
   ): Promise<void> => {
     try {
       const userId = parseInt(req.params.id);
-      const roleId = parseInt(req.params.roleId);
+      const currentUserId = req.user?.id;
 
-      const result = await this.userService.removeRole(userId, roleId);
+      const result = await this.userService.removeRole(userId, currentUserId);
 
       const response: ApiResponse = {
         success: result.success,
@@ -404,7 +405,106 @@ export class UserController {
   };
 
 
-  // ... existing code ...
+  /**
+   * Activar un usuario (solo administradores)
+   * @route PUT /api/users/:id/activate
+   */
+  activateUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const userId = parseInt(req.params.id);
+      const currentUserId = req.user?.id;
+
+      if (!userId || isNaN(userId)) {
+        throw new BadRequestError('ID de usuario inválido');
+      }
+
+      const result = await this.userService.activateUser(userId, currentUserId);
+
+      const response: ApiResponse = {
+        success: result.success,
+        message: result.message,
+        data: result.user,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Desactivar un usuario (solo administradores)
+   * @route PUT /api/users/:id/deactivate
+   */
+  deactivateUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const userId = parseInt(req.params.id);
+      const currentUserId = req.user?.id;
+
+      if (!userId || isNaN(userId)) {
+        throw new BadRequestError('ID de usuario inválido');
+      }
+
+      const result = await this.userService.deactivateUser(userId, currentUserId);
+
+      const response: ApiResponse = {
+        success: result.success,
+        message: result.message,
+        data: result.user,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Cambiar el estado de un usuario (solo administradores)
+   * @route PUT /api/users/:id/status
+   */
+  updateUserStatus = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { status } = req.body;
+      const currentUserId = req.user?.id;
+
+      if (!userId || isNaN(userId)) {
+        throw new BadRequestError('ID de usuario inválido');
+      }
+
+      if (!status) {
+        throw new BadRequestError('El estado es requerido');
+      }
+
+      const result = await this.userService.updateUserStatus(userId, status, currentUserId);
+
+      const response: ApiResponse = {
+        success: result.success,
+        message: result.message,
+        data: result.user,
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
 
 /**
  * Obtener información completa de todos los usuarios

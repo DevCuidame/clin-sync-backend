@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { PackageService } from './package-service.model';
 
 @Entity('packages')
 export class Package {
@@ -38,4 +39,8 @@ export class Package {
 
   @UpdateDateColumn()
   updated_at!: Date;
+
+  // Relación con PackageService
+  @OneToMany(() => PackageService, packageService => packageService.package)
+  packageServices!: PackageService[];
 }

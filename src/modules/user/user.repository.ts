@@ -88,38 +88,67 @@ export class UserRepository extends BaseRepository<User> {
   async assignRole(userId: number, roleId: number): Promise<UserRole> {
     const userRoleRepository = this.repository.manager.getRepository(UserRole);
     
-    // Verificar si ya existe esta asignación
+    // Verificar si ya existe esta asignación (incluyendo inactivos)
     const existingAssignment = await userRoleRepository.findOne({
       where: { user_id: userId, role_id: roleId }
     });
     
     if (existingAssignment) {
+      // Si existe pero está inactivo, reactivarlo
+      if (!existingAssignment.is_active) {
+        existingAssignment.is_active = true;
+        existingAssignment.assigned_at = new Date();
+        return await userRoleRepository.save(existingAssignment);
+      }
+      // Si ya existe y está activo, devolverlo
       return existingAssignment;
     }
     
-    // Crear nueva asignación
-    const userRole = userRoleRepository.create({
-      user_id: userId,
-      role_id: roleId
-    });
-    
-    return await userRoleRepository.save(userRole);
+    try {
+      // Crear nueva asignación
+      const userRole = userRoleRepository.create({
+        user_id: userId,
+        role_id: roleId
+      });
+      
+      return await userRoleRepository.save(userRole);
+    } catch (error: any) {
+      // Si hay error de duplicado, intentar obtener el registro existente
+      if (error.code === '23505') { // Código de error PostgreSQL para violación de restricción única
+        const existingAssignment = await userRoleRepository.findOne({
+          where: { user_id: userId, role_id: roleId }
+        });
+        if (existingAssignment) {
+          return existingAssignment;
+        }
+      }
+      throw error;
+    }
   }
 
   /**
-   * Elimina un rol de un usuario
+   * Elimina un rol de un usuario (desactivándolo en lugar de eliminarlo físicamente)
    * @param userId ID del usuario
    * @param roleId ID del rol
    * @returns True si se eliminó correctamente
    */
   async removeRole(userId: number, roleId: number): Promise<boolean> {
     const userRoleRepository = this.repository.manager.getRepository(UserRole);
-    const result = await userRoleRepository.delete({
-      user_id: userId,
-      role_id: roleId
+    
+    // Buscar la asignación activa
+    const userRole = await userRoleRepository.findOne({
+      where: { user_id: userId, role_id: roleId, is_active: true }
     });
     
-    return result.affected !== undefined && result.affected !== null && result.affected > 0;
+    if (!userRole) {
+      return false;
+    }
+    
+    // Desactivar en lugar de eliminar físicamente
+    userRole.is_active = false;
+    await userRoleRepository.save(userRole);
+    
+    return true;
   }
 
   /**
@@ -147,6 +176,134 @@ export class UserRepository extends BaseRepository<User> {
    */
   async updateVerificationStatus(userId: number, verified: boolean): Promise<User> {
     await this.repository.update(userId, { verified: verified });
+    const user = await this.findById(userId);
+    
+    if (!user) {
+      throw new NotFoundError(`Usuario con ID ${userId} no encontrado`);
+    }
+    
+    return user;
+  }
+
+  /**
+   * Actualiza el rol del usuario (reemplaza el rol existente)
+   * @param userId ID del usuario
+   * @param roleId ID del nuevo rol
+   * @returns Información sobre si es un rol nuevo o actualizado
+   */
+  async updateUserRole(userId: number, roleId: number): Promise<{ isNewRole: boolean }> {
+    const userRoleRepository = this.repository.manager.getRepository(UserRole);
+    
+    // Usar transacción para asegurar consistencia
+    return await this.repository.manager.transaction(async (transactionalEntityManager) => {
+      const transactionalUserRoleRepo = transactionalEntityManager.getRepository(UserRole);
+      
+      // Verificar si el usuario ya tiene este rol activo
+      const existingRole = await transactionalUserRoleRepo.findOne({
+        where: { user_id: userId, role_id: roleId, is_active: true }
+      });
+      
+      if (existingRole) {
+        // El usuario ya tiene este rol, no hacer nada
+        return { isNewRole: false };
+      }
+      
+      // Desactivar todos los roles existentes del usuario
+      await transactionalUserRoleRepo.update(
+        { user_id: userId, is_active: true },
+        { is_active: false }
+      );
+      
+      // Verificar si existe una asignación previa inactiva para reactivar
+      const inactiveRole = await transactionalUserRoleRepo.findOne({
+        where: { user_id: userId, role_id: roleId, is_active: false }
+      });
+      
+      if (inactiveRole) {
+        // Reactivar el rol existente
+        inactiveRole.is_active = true;
+        inactiveRole.assigned_at = new Date();
+        await transactionalUserRoleRepo.save(inactiveRole);
+        return { isNewRole: false };
+      } else {
+        // Crear nueva asignación de rol
+        const newUserRole = transactionalUserRoleRepo.create({
+          user_id: userId,
+          role_id: roleId,
+          is_active: true
+        });
+        await transactionalUserRoleRepo.save(newUserRole);
+        return { isNewRole: true };
+      }
+    });
+  }
+
+  /**
+   * Elimina todos los roles activos de un usuario
+   * @param userId ID del usuario
+   * @returns True si se eliminaron roles correctamente
+   */
+  async removeAllUserRoles(userId: number): Promise<boolean> {
+    const userRoleRepository = this.repository.manager.getRepository(UserRole);
+    
+    // Buscar roles activos del usuario
+    const activeRoles = await userRoleRepository.find({
+      where: { user_id: userId, is_active: true }
+    });
+    
+    if (activeRoles.length === 0) {
+      return false;
+    }
+    
+    // Desactivar todos los roles activos
+    await userRoleRepository.update(
+      { user_id: userId, is_active: true },
+      { is_active: false }
+    );
+    
+    return true;
+  }
+
+  /**
+   * Activa un usuario cambiando su estado a ACTIVE
+   * @param userId ID del usuario
+   * @returns El usuario actualizado
+   */
+  async activateUser(userId: number): Promise<User> {
+    await this.repository.update(userId, { status: 'active' as any });
+    const user = await this.findById(userId);
+    
+    if (!user) {
+      throw new NotFoundError(`Usuario con ID ${userId} no encontrado`);
+    }
+    
+    return user;
+  }
+
+  /**
+   * Desactiva un usuario cambiando su estado a INACTIVE
+   * @param userId ID del usuario
+   * @returns El usuario actualizado
+   */
+  async deactivateUser(userId: number): Promise<User> {
+    await this.repository.update(userId, { status: 'inactive' as any });
+    const user = await this.findById(userId);
+    
+    if (!user) {
+      throw new NotFoundError(`Usuario con ID ${userId} no encontrado`);
+    }
+    
+    return user;
+  }
+
+  /**
+   * Actualiza el estado de un usuario
+   * @param userId ID del usuario
+   * @param status Nuevo estado del usuario
+   * @returns El usuario actualizado
+   */
+  async updateUserStatus(userId: number, status: string): Promise<User> {
+    await this.repository.update(userId, { status: status as any });
     const user = await this.findById(userId);
     
     if (!user) {

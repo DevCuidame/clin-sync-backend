@@ -180,6 +180,82 @@ export class PurchaseService {
     return this.mapToResponseDto(updatedPurchase);
   }
 
+  /**
+   * Confirmar pago en efectivo - Actualiza estado a 'completed' y agrega notas del administrador
+   */
+  async confirmCashPayment(purchaseId: number, adminNotes?: string): Promise<PurchaseResponseDto | null> {
+    const purchase = await this.purchaseRepository.findOne({
+      where: { purchase_id: purchaseId },
+      relations: ['user', 'package']
+    });
+
+    if (!purchase) {
+      return null;
+    }
+
+    // Actualizar estado y agregar información de confirmación
+    purchase.payment_status = PaymentStatus.COMPLETED;
+    
+    // Agregar información de confirmación a payment_details
+    const currentDetails = purchase.payment_details || {};
+    purchase.payment_details = {
+      ...currentDetails,
+      confirmed_at: new Date().toISOString(),
+      confirmed_by: 'admin', // En el futuro se puede agregar el ID del admin
+      admin_notes: adminNotes || 'Pago en efectivo confirmado por administrador',
+      confirmation_method: 'manual_admin_confirmation'
+    };
+
+    const updatedPurchase = await this.purchaseRepository.save(purchase);
+    return this.mapToResponseDto(updatedPurchase);
+  }
+
+  /**
+   * Rechazar pago en efectivo - Actualiza estado a 'failed' y agrega razón del rechazo
+   */
+  async rejectCashPayment(purchaseId: number, rejectionReason?: string): Promise<PurchaseResponseDto | null> {
+    const purchase = await this.purchaseRepository.findOne({
+      where: { purchase_id: purchaseId },
+      relations: ['user', 'package']
+    });
+
+    if (!purchase) {
+      return null;
+    }
+
+    // Actualizar estado y agregar información de rechazo
+    purchase.payment_status = PaymentStatus.FAILED;
+    
+    // Agregar información de rechazo a payment_details
+    const currentDetails = purchase.payment_details || {};
+    purchase.payment_details = {
+      ...currentDetails,
+      rejected_at: new Date().toISOString(),
+      rejected_by: 'admin', // En el futuro se puede agregar el ID del admin
+      rejection_reason: rejectionReason || 'Pago en efectivo rechazado por administrador',
+      rejection_method: 'manual_admin_rejection'
+    };
+
+    const updatedPurchase = await this.purchaseRepository.save(purchase);
+    return this.mapToResponseDto(updatedPurchase);
+  }
+
+  /**
+   * Obtener pagos en efectivo pendientes de confirmación
+   */
+  async getPendingCashPayments(): Promise<PurchaseResponseDto[]> {
+    const purchases = await this.purchaseRepository.find({
+      where: { 
+        payment_status: PaymentStatus.PENDING,
+        payment_method: WompiPaymentMethod.CASH
+      },
+      relations: ['user', 'package'],
+      order: { purchase_date: 'ASC' } // Los más antiguos primero
+    });
+
+    return purchases.map(purchase => this.mapToResponseDto(purchase));
+  }
+
   async getPurchasesByStatus(paymentStatus: PaymentStatus): Promise<PurchaseResponseDto[]> {
     const purchases = await this.purchaseRepository.find({
       where: { payment_status: paymentStatus },

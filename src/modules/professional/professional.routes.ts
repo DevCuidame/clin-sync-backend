@@ -12,6 +12,7 @@ router.get('/:id', professionalController.getProfessionalById.bind(professionalC
 // Rutas protegidas
 router.use(authMiddleware);
 
+router.get('/complete-info/:user_id', professionalController.getProfessionalCompleteInfoByUserId.bind(professionalController));
 router.post('/', professionalController.createProfessional.bind(professionalController));
 router.put('/:id', professionalController.updateProfessional.bind(professionalController));
 router.delete('/:id', professionalController.deleteProfessional.bind(professionalController));

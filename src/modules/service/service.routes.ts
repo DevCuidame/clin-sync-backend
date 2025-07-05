@@ -17,5 +17,6 @@ router.get('/', (req, res) => serviceController.getAllServices(req, res));
 router.post('/', authMiddleware, (req, res) => serviceController.createService(req, res));
 router.put('/:id', authMiddleware, (req, res) => serviceController.updateService(req, res));
 router.delete('/:id', authMiddleware, (req, res) => serviceController.deleteService(req, res));
+router.patch('/:id/toggle-status', authMiddleware, restrictTo(['admin']), (req, res) => serviceController.toggleServiceStatus(req, res));
 
 export default router;

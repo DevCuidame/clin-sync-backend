@@ -262,14 +262,14 @@ export function conditionalRole(
 }
 
 /**
- * Obtiene los roles de un usuario desde la base de datos
+ * Obtiene los roles activos de un usuario desde la base de datos
  */
 async function getUserRoles(userId: number): Promise<string[]> {
   try {
     const userRoleRepository = AppDataSource.getRepository(UserRole);
     
     const userRoles = await userRoleRepository.find({
-      where: { user: { id: userId } },
+      where: { user: { id: userId }, is_active: true },
       relations: ['role']
     });
 
