@@ -85,6 +85,7 @@ CREATE TABLE services (
     duration_minutes INT NOT NULL,
     category VARCHAR(50) CHECK (category IN ('consultation', 'therapy', 'assessment', 'workshop', 'other')) NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
+    image_url VARCHAR(500) NULL,
     metadata JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

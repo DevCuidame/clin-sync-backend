@@ -2,6 +2,7 @@ import { AppDataSource } from '../../core/config/database';
 import { Service, ServiceCategory } from '../../models/service.model';
 import { Repository } from 'typeorm';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
+import { FileUploadService } from '../../utils/file-upload.util';
 
 interface ServiceFilters {
   category?: string;
@@ -70,6 +71,25 @@ export class ServiceService {
   }
 
   async deleteService(id: number): Promise<void> {
+    // Obtener el servicio antes de eliminarlo para acceder a la imagen
+    const serviceToDelete = await this.serviceRepository.findOne({
+      where: { service_id: id }
+    });
+    
+    if (!serviceToDelete) {
+      throw new Error('Service not found');
+    }
+    
+    // Eliminar la imagen asociada si existe
+    if (serviceToDelete.image_url) {
+      try {
+        await FileUploadService.deleteFile(serviceToDelete.image_url);
+      } catch (error) {
+        console.warn('Error al eliminar imagen del servicio:', error);
+        // Continuar con la eliminación del servicio aunque falle la eliminación de la imagen
+      }
+    }
+    
     const result = await this.serviceRepository.delete(id);
 
     if (result.affected === 0) {

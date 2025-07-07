@@ -9,6 +9,10 @@ export interface CreatePackageDto {
   terms_conditions?: string;
   image_url?: string;
   image_base64?: string; // Para recibir imagen en formato base64
+  services?: Array<{
+    service_id: string | number;
+    sessions_included: number;
+  }>;
 }
 
 export interface UpdatePackageDto {
@@ -22,6 +26,10 @@ export interface UpdatePackageDto {
   terms_conditions?: string;
   image_url?: string;
   image_base64?: string; // Para recibir imagen en formato base64
+  services?: Array<{
+    service_id: string | number;
+    sessions_included: number;
+  }>;
 }
 
 export interface PackageResponseDto {

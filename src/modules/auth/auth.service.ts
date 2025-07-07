@@ -59,7 +59,7 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
   const normalizedEmail = email.toLowerCase();
 
   // Buscar usuario por email incluyendo el campo password
-  const user = await this.userRepository.findByEmail(normalizedEmail, true);
+  const user = await this.userRepository.findByEmail(normalizedEmail, false);
   if (!user) {
     throw new UnauthorizedError('Credenciales inválidas');
   }

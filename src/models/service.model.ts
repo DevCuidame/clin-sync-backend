@@ -37,6 +37,10 @@ export class Service {
   @Column({ type: 'json', nullable: true })
   metadata?: any;
 
+   @Column({ type: 'varchar', length: 500, nullable: true })
+  image_url?: string;
+
+
   @CreateDateColumn()
   created_at!: Date;
 

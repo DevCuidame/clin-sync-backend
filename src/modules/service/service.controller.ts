@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { ServiceService } from './service.service';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
+import { FileUploadService } from '../../utils/file-upload.util';
 
 export class ServiceController {
   private serviceService: ServiceService;
@@ -12,16 +13,35 @@ export class ServiceController {
   async createService(req: Request, res: Response): Promise<void> {
     try {
       const serviceData: CreateServiceDto = req.body;
+      
+      // Manejar carga de imagen si se proporciona
+      if (serviceData.image_url) {
+        try {
+          const imageUrl = await FileUploadService.saveBase64Image(
+            serviceData.image_url,
+            'services',
+            undefined,
+            `service_${serviceData.service_name.replace(/\s+/g, '_').toLowerCase()}`
+          );
+          serviceData.image_url = `/${imageUrl}`;
+        } catch (imageError) {
+          console.warn('Error al guardar imagen del servicio:', imageError);
+          // Continuar sin imagen si hay error
+        }
+        // Remover el base64 del objeto antes de guardarlo
+        delete serviceData.image_url;
+      }
+      
       const service = await this.serviceService.createService(serviceData);
       res.status(201).json({
         success: true,
         data: service,
-        message: 'Service created successfully'
+        message: 'Servicio creado exitosamente'
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error creating service',
+        message: 'Error al crear el servicio',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
@@ -29,9 +49,8 @@ export class ServiceController {
 
   async getServices(req: Request, res: Response): Promise<void> {
     try {
-      const { category, is_active } = req.query;
+      const { is_active } = req.query;
       const services = await this.serviceService.getServices({
-        category: category as string,
         is_active: is_active === 'true'
       });
       res.status(200).json({
@@ -93,17 +112,52 @@ export class ServiceController {
     try {
       const { id } = req.params;
       const updateData: UpdateServiceDto = req.body;
+      
+      // Obtener el servicio actual para manejar la imagen anterior
+      const currentService = await this.serviceService.getServiceById(parseInt(id));
+      if (!currentService) {
+        res.status(404).json({
+          success: false,
+          message: 'Servicio no encontrado'
+        });
+        return;
+      }
+      
+      // Manejar actualización de imagen si se proporciona
+      if (updateData.image_base64) {
+        try {
+          // Eliminar imagen anterior si existe
+          if (currentService.image_url) {
+            await FileUploadService.deleteFile(currentService.image_url);
+          }
+          
+          // Guardar nueva imagen
+          const imageUrl = await FileUploadService.saveBase64Image(
+            updateData.image_base64,
+            'services',
+            undefined,
+            `service_${updateData.service_name?.replace(/\s+/g, '_').toLowerCase() || currentService.service_name.replace(/\s+/g, '_').toLowerCase()}`
+          );
+          updateData.image_url = `/${imageUrl}`;
+        } catch (imageError) {
+          console.warn('Error al actualizar imagen del servicio:', imageError);
+          // Continuar sin actualizar imagen si hay error
+        }
+        // Remover el base64 del objeto antes de guardarlo
+        delete updateData.image_base64;
+      }
+      
       const service = await this.serviceService.updateService(parseInt(id), updateData);
       
       res.status(200).json({
         success: true,
         data: service,
-        message: 'Service updated successfully'
+        message: 'Servicio actualizado exitosamente'
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error updating service',
+        message: 'Error al actualizar el servicio',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

@@ -31,6 +31,7 @@ export class UserRepository extends BaseRepository<User> {
         verified: true,
         phone: true,
         gender: true,
+        status: true,
         birth_date: true,
         identification_type: true,
         identification_number: true,

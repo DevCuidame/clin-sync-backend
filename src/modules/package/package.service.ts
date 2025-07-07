@@ -19,20 +19,45 @@ export class PackageService {
   }
 
   async createPackage(packageData: CreatePackageDto): Promise<PackageResponseDto> {
-    const newPackage = this.packageRepository.create({
-      package_name: packageData.package_name,
-      description: packageData.description,
-      price: packageData.price,
-      total_sessions: packageData.total_sessions,
-      validity_days: packageData.validity_days,
-      discount_percentage: packageData.discount_percentage,
-      is_active: packageData.is_active ?? true,
-      terms_conditions: packageData.terms_conditions,
-      image_url: packageData.image_url
-    });
+    // Usar transacción para asegurar consistencia
+    return await AppDataSource.transaction(async manager => {
+      // Crear el paquete
+      const newPackage = manager.create(Package, {
+        package_name: packageData.package_name,
+        description: packageData.description,
+        price: packageData.price,
+        total_sessions: packageData.total_sessions,
+        validity_days: packageData.validity_days,
+        discount_percentage: packageData.discount_percentage,
+        is_active: packageData.is_active ?? true,
+        terms_conditions: packageData.terms_conditions,
+        image_url: packageData.image_url
+      });
 
-    const savedPackage = await this.packageRepository.save(newPackage);
-    return this.mapToResponseDto(savedPackage);
+      const savedPackage = await manager.save(Package, newPackage);
+
+      // Si se proporcionaron servicios, crear las relaciones
+      if (packageData.services && packageData.services.length > 0) {
+        for (const serviceData of packageData.services) {
+          // Verificar que el servicio existe
+          const service = await manager.findOne(Service, {
+            where: { service_id: parseInt(serviceData.service_id.toString()) }
+          });
+
+          if (service) {
+            const packageService = manager.create(PackageServiceModel, {
+              package_id: savedPackage.package_id,
+              service_id: service.service_id,
+              sessions_included: serviceData.sessions_included
+            });
+
+            await manager.save(PackageServiceModel, packageService);
+          }
+        }
+      }
+
+      return this.mapToResponseDto(savedPackage);
+    });
   }
 
   async getAllPackages(isActive?: boolean): Promise<PackageResponseDto[]> {
@@ -60,25 +85,85 @@ export class PackageService {
     return this.mapToResponseDto(packageData);
   }
 
-  async updatePackage(packageId: number, updateData: UpdatePackageDto): Promise<PackageResponseDto | null> {
-    const existingPackage = await this.packageRepository.findOne({
-      where: { package_id: packageId }
-    });
+  async getPackageWithServices(packageId: number): Promise<any | null> {
+    const packageWithRelations = await this.packageRepository
+      .createQueryBuilder('package')
+      .leftJoinAndSelect('package.packageServices', 'ps')
+      .leftJoinAndSelect('ps.service', 'service')
+      .where('package.package_id = :packageId', { packageId })
+      .getOne();
 
-    if (!existingPackage) {
+    if (!packageWithRelations) {
       return null;
     }
 
-    // Update only provided fields
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key as keyof UpdatePackageDto] !== undefined) {
-        (existingPackage as any)[key] = updateData[key as keyof UpdatePackageDto];
-      }
-    });
+    const services = packageWithRelations.packageServices?.map(ps => ({
+      service_id: ps.service.service_id,
+      service_name: ps.service.service_name,
+      description: ps.service.description,
+      base_price: ps.service.base_price,
+      duration_minutes: ps.service.duration_minutes,
+      category: ps.service.category,
+      sessions_included: ps.sessions_included
+    })) || [];
 
-    existingPackage.updated_at = new Date();
-    const updatedPackage = await this.packageRepository.save(existingPackage);
-    return this.mapToResponseDto(updatedPackage);
+    return {
+      ...this.mapToResponseDto(packageWithRelations),
+      services: services,
+      total_services: services.length
+    };
+  }
+
+  async updatePackage(packageId: number, updateData: UpdatePackageDto): Promise<PackageResponseDto | null> {
+    // Usar transacción para asegurar consistencia
+    return await AppDataSource.transaction(async manager => {
+      const existingPackage = await manager.findOne(Package, {
+        where: { package_id: packageId }
+      });
+
+      if (!existingPackage) {
+        return null;
+      }
+
+      // Crear una copia de updateData sin el campo services
+      const { services, ...packageUpdateData } = updateData;
+
+      // Update only provided fields (excluding services)
+      Object.keys(packageUpdateData).forEach(key => {
+        if (packageUpdateData[key as keyof typeof packageUpdateData] !== undefined) {
+          (existingPackage as any)[key] = packageUpdateData[key as keyof typeof packageUpdateData];
+        }
+      });
+
+      existingPackage.updated_at = new Date();
+      const updatedPackage = await manager.save(Package, existingPackage);
+
+      // Si se proporcionaron servicios, actualizar las relaciones
+      if (services && services.length >= 0) {
+        // Eliminar todas las relaciones existentes
+        await manager.delete(PackageServiceModel, { package_id: packageId });
+
+        // Crear las nuevas relaciones
+        for (const serviceData of services) {
+          // Verificar que el servicio existe
+          const service = await manager.findOne(Service, {
+            where: { service_id: parseInt(serviceData.service_id.toString()) }
+          });
+
+          if (service) {
+            const packageService = manager.create(PackageServiceModel, {
+              package_id: packageId,
+              service_id: service.service_id,
+              sessions_included: serviceData.sessions_included
+            });
+
+            await manager.save(PackageServiceModel, packageService);
+          }
+        }
+      }
+
+      return this.mapToResponseDto(updatedPackage);
+    });
   }
 
   async deletePackage(packageId: number): Promise<boolean> {

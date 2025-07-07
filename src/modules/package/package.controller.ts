@@ -33,10 +33,18 @@ export class PackageController {
       }
       
       const newPackage = await this.packageService.createPackage(packageData);
+      
+      // Si se crearon servicios, obtener el paquete completo con servicios
+      let responseData = newPackage;
+      if (packageData.services && packageData.services.length > 0) {
+        const packageWithServices = await this.packageService.getPackageWithServices(newPackage.package_id);
+        responseData = packageWithServices || newPackage;
+      }
+      
       res.status(201).json({
         success: true,
-        message: 'Paquete creado exitosamente',
-        data: newPackage
+        message: `Paquete creado exitosamente${packageData.services ? ' con ' + packageData.services.length + ' servicio(s) asociado(s)' : ''}`,
+        data: responseData
       });
     } catch (error) {
       res.status(500).json({
@@ -69,7 +77,7 @@ export class PackageController {
   getPackageById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const packageData = await this.packageService.getPackageById(parseInt(id));
+      const packageData = await this.packageService.getPackageWithServices(parseInt(id));
       
       if (!packageData) {
         res.status(404).json({
@@ -141,10 +149,17 @@ export class PackageController {
         return;
       }
 
+      // Si se actualizaron servicios, obtener el paquete completo con servicios
+      let responseData = updatedPackage;
+      if (updateData.services !== undefined) {
+        const packageWithServices = await this.packageService.getPackageWithServices(updatedPackage.package_id);
+        responseData = packageWithServices || updatedPackage;
+      }
+
       res.status(200).json({
         success: true,
-        message: 'Paquete actualizado exitosamente',
-        data: updatedPackage
+        message: `Paquete actualizado exitosamente${updateData.services !== undefined ? ' con ' + (updateData.services?.length || 0) + ' servicio(s) asociado(s)' : ''}`,
+        data: responseData
       });
     } catch (error) {
       res.status(500).json({
