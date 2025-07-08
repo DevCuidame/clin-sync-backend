@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { User } from './user.model';
 import { Package } from './package.model';
 import { PaymentTransaction } from './payment-transaction.model';
+import { UserSession } from './user-session.model';
 
 export enum PaymentStatus {
   PENDING = 'pending',
@@ -61,4 +62,7 @@ export class Purchase {
 
   @OneToMany(() => PaymentTransaction, paymentTransaction => paymentTransaction.purchase)
   payment_transactions!: PaymentTransaction[];
+
+  @OneToMany(() => UserSession, userSession => userSession.purchase)
+  userSessions!: UserSession[];
 }

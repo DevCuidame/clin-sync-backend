@@ -1,9 +1,15 @@
 /**
- * Crear una fecha local desde un string YYYY-MM-DD sin problemas de zona horaria
- * @param dateString Fecha en formato YYYY-MM-DD
+ * Crear una fecha local desde un string YYYY-MM-DD o timestamp ISO sin problemas de zona horaria
+ * @param dateString Fecha en formato YYYY-MM-DD o timestamp ISO (YYYY-MM-DDTHH:mm:ss.sssZ)
  * @returns Objeto Date en zona horaria local
  */
 export function createLocalDate(dateString: string): Date {
+  // Si es un timestamp ISO completo, usar el constructor Date directamente
+  if (dateString.includes('T') || dateString.includes('Z')) {
+    return new Date(dateString);
+  }
+  
+  // Si es solo fecha YYYY-MM-DD, usar el método original
   const [year, month, day] = dateString.split('-').map(Number);
   return new Date(year, month - 1, day); // month - 1 porque los meses en JS van de 0-11
 }

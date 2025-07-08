@@ -3,6 +3,7 @@ import { AppointmentService } from './appointment.service';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto, CancelAppointmentDto, RescheduleAppointmentDto } from './appointment.dto';
 import { validate } from 'class-validator';
 import { plainToClass } from 'class-transformer';
+import { AppointmentStatus } from '../../models/appointment.model';
 
 export class AppointmentController {
   private appointmentService: AppointmentService;
@@ -18,8 +19,9 @@ export class AppointmentController {
 
       const dto = plainToClass(CreateAppointmentDto, req.body);
       dto.user_id = userId;
+      dto.status = AppointmentStatus.SCHEDULED;
       const errors = await validate(dto);
-
+      
       if (errors.length > 0) {
         res.status(400).json({
           success: false,
@@ -28,16 +30,50 @@ export class AppointmentController {
         });
         return;
       }
-
+      
       const appointment = await this.appointmentService.createAppointment(dto);
+      
+      // Crear un resumen completo con todos los datos relacionados
+      const appointmentSummary = {
+        appointment: {
+          id: appointment.appointment_id,
+          scheduled_at: appointment.scheduled_at,
+          duration_minutes: appointment.duration_minutes,
+          status: appointment.status,
+          amount: appointment.amount,
+          notes: appointment.notes,
+          google_calendar_event_id: appointment.google_calendar_event_id,
+          created_at: appointment.created_at
+        },
+        client: {
+          id: appointment.user?.id,
+          name: appointment.user?.first_name,
+          email: appointment.user?.email,
+          phone: appointment.user?.phone
+        },
+        professional: {
+          id: appointment.professional?.professional_id,
+          name: appointment.professional?.user?.first_name,
+          email: appointment.professional?.user?.email,
+          specialization: appointment.professional?.specialization,
+          license_number: appointment.professional?.license_number
+        },
+        service: {
+          id: appointment.service?.service_id,
+          name: appointment.service?.service_name,
+          description: appointment.service?.description,
+          duration_minutes: appointment.service?.duration_minutes,
+          price: appointment.service?.base_price
+        },
+      };
       
       res.status(201).json({
         success: true,
-        message: 'Appointment created successfully',
-        data: appointment
+        message: 'Cita creada exitosamente',
+        data: appointmentSummary,
       });
     } catch (error: any) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: error.message || 'Error creating appointment'
       });
@@ -444,6 +480,46 @@ export class AppointmentController {
       res.status(500).json({
         success: false,
         message: error.message || 'Error fetching professional upcoming appointments'
+      });
+    }
+  }
+
+  async getUserAppointmentsWithSessions(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'User not authenticated'
+        });
+        return;
+      }
+
+      // Agregar el user_id del usuario autenticado a los filtros
+      const query = {
+        ...req.query,
+        user_id: userId
+      };
+
+      const result = await this.appointmentService.getUserAppointmentsWithSessions(query);
+
+      const page = Number((query as any).page) || 1;
+      const limit = Number((query as any).limit) || 10;
+
+      res.status(200).json({
+        success: true,
+        data: result.appointments,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit)
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Error fetching user appointments with sessions'
       });
     }
   }

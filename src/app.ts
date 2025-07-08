@@ -69,7 +69,8 @@ const initializeApp = async (): Promise<void> => {
     
     // Inicializar módulo de limpieza de base de datos
     initializeDatabaseCleanup();
-    
+
+        
     // Debug: Mostrar rutas registradas
     app._router.stack.forEach((middleware: any) => {
       if (middleware.route) {
@@ -81,7 +82,7 @@ const initializeApp = async (): Promise<void> => {
         });
       }
     });
-    
+
     logger.info('✅ Aplicación inicializada correctamente');
   } catch (error) {
     logger.error('❌ Error al inicializar la aplicación:', error);

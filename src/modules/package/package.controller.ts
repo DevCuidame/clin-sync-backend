@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PackageService } from './package.service';
-import { CreatePackageDto, UpdatePackageDto } from './package.dto';
+import { CreatePackageDto, UpdatePackageDto, UserPackageWithSessionsDto } from './package.dto';
 import { FileUploadService } from '../../utils/file-upload.util';
 
 export class PackageController {

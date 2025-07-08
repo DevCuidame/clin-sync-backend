@@ -46,3 +46,24 @@ export interface PackageResponseDto {
   created_at: Date;
   updated_at: Date;
 }
+
+export interface UserPackageWithSessionsDto {
+  purchase_id: number;
+  amount_paid: number;
+  payment_status: string;
+  payment_method?: string;
+  transaction_id?: string;
+  purchase_date: Date;
+  expires_at: Date;
+  sessions_used: number;        // NUEVO: Sesiones utilizadas
+  sessions_remaining: number;   // NUEVO: Sesiones restantes
+  status: UserPackageStatus;    // NUEVO: Estado del paquete
+  package: PackageResponseDto;
+}
+
+// Enum para los estados del paquete del usuario
+export enum UserPackageStatus {
+  ACTIVE = 'active',
+  EXHAUSTED = 'exhausted',
+  CANCELLED = 'cancelled'
+}

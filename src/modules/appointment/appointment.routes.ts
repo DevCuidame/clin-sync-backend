@@ -14,6 +14,11 @@ router.post('/', appointmentController.createAppointment.bind(appointmentControl
 router.get('/', appointmentController.getAppointments.bind(appointmentController));
 router.get('/upcoming/:userId', appointmentController.getUpcomingAppointments.bind(appointmentController));
 router.get('/upcoming-professional', appointmentController.getUpcomingAppointmentsByProfessional.bind(appointmentController));
+// Obtener citas del usuario con detalles de sesiones y datos relacionados
+// Query params: professional_id, service_id, status, start_date, end_date, user_session_id, package_id,
+//               include_session_details, include_service_details, include_professional_details,
+//               page, limit
+router.get('/user/with-sessions', appointmentController.getUserAppointmentsWithSessions.bind(appointmentController));
 router.get('/:id', appointmentController.getAppointmentById.bind(appointmentController));
 router.put('/:id', appointmentController.updateAppointment.bind(appointmentController));
 router.patch('/:id/cancel', appointmentController.cancelAppointment.bind(appointmentController));

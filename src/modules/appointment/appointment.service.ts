@@ -7,6 +7,7 @@ import { GoogleCalendarService, createGoogleCalendarService, CalendarEvent } fro
 import { User } from '../../models/user.model';
 import { Professional } from '../../models/professional.model';
 import { Service } from '../../models/service.model';
+import { UserSession, UserSessionStatus } from '../../models/user-session.model';
 import logger from '../../utils/logger';
 import { createLocalDate } from '../../utils/date-format';
 
@@ -15,6 +16,7 @@ export class AppointmentService {
   private userRepository: Repository<User>;
   private professionalRepository: Repository<Professional>;
   private serviceRepository: Repository<Service>;
+  private userSessionRepository: Repository<UserSession>;
   private googleCalendarService: GoogleCalendarService | null = null;
 
   constructor() {
@@ -22,6 +24,7 @@ export class AppointmentService {
     this.userRepository = AppDataSource.getRepository(User);
     this.professionalRepository = AppDataSource.getRepository(Professional);
     this.serviceRepository = AppDataSource.getRepository(Service);
+    this.userSessionRepository = AppDataSource.getRepository(UserSession);
     
     // Inicializar Google Calendar Service si las credenciales están disponibles
     try {
@@ -76,7 +79,9 @@ export class AppointmentService {
         }
       }
 
-      return savedAppointment;
+      // Obtener la cita completa con todas las relaciones
+      const appointmentWithRelations = await this.getAppointmentById(savedAppointment.appointment_id);
+      return appointmentWithRelations || savedAppointment;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -332,9 +337,34 @@ export class AppointmentService {
         throw new BadRequestError('Cannot complete a cancelled appointment');
       }
 
+      if (appointment.status === AppointmentStatus.COMPLETED) {
+        throw new BadRequestError('Appointment is already completed');
+      }
+
+      // Actualizar el estado de la cita
       await this.appointmentRepository.update(appointmentId, {
         status: AppointmentStatus.COMPLETED
       });
+
+      // Si la cita tiene una sesión asociada, decrementar sessions_remaining
+      if (appointment.user_session_id) {
+        const userSession = await this.userSessionRepository.findOne({
+          where: { user_session_id: appointment.user_session_id }
+        });
+
+        if (userSession && userSession.sessions_remaining > 0) {
+          const newSessionsRemaining = userSession.sessions_remaining - 1;
+          
+          // Actualizar sessions_remaining
+          await this.userSessionRepository.update(appointment.user_session_id, {
+            sessions_remaining: newSessionsRemaining,
+            // Si no quedan sesiones, marcar como expirada
+            status: newSessionsRemaining === 0 ? UserSessionStatus.EXPIRED : userSession.status
+          });
+
+          logger.info(`Session decremented for appointment ${appointmentId}. Remaining sessions: ${newSessionsRemaining}`);
+        }
+      }
 
       return await this.getAppointmentById(appointmentId);
     } catch (error) {
@@ -457,6 +487,175 @@ export class AppointmentService {
         throw error;
       }
       throw new InternalServerError('Error fetching professional upcoming appointments');
+    }
+  }
+
+  async getUserAppointmentsWithSessions(query: any): Promise<{ appointments: any[], total: number }> {
+    try {
+      const { 
+        user_id, 
+        professional_id, 
+        service_id, 
+        status, 
+        start_date, 
+        end_date, 
+        user_session_id,
+        package_id,
+        include_session_details = true,
+        include_service_details = true,
+        include_professional_details = true,
+        page = 1, 
+        limit = 10 
+      } = query;
+      
+      const skip = (page - 1) * limit;
+
+      const queryBuilder = this.appointmentRepository.createQueryBuilder('appointment')
+        .leftJoinAndSelect('appointment.user', 'user')
+        .leftJoinAndSelect('appointment.professional', 'professional')
+        .leftJoinAndSelect('professional.user', 'professionalUser')
+        .leftJoinAndSelect('appointment.service', 'service')
+        .leftJoinAndSelect('appointment.user_session', 'user_session')
+        .leftJoinAndSelect('user_session.purchase', 'purchase')
+        .leftJoinAndSelect('purchase.package', 'package')
+        .orderBy('appointment.scheduled_at', 'DESC');
+
+      // Aplicar filtros
+      if (user_id) {
+        queryBuilder.andWhere('appointment.user_id = :user_id', { user_id });
+      }
+
+      if (professional_id) {
+        queryBuilder.andWhere('appointment.professional_id = :professional_id', { professional_id });
+      }
+
+      if (service_id) {
+        queryBuilder.andWhere('appointment.service_id = :service_id', { service_id });
+      }
+
+      if (status) {
+        queryBuilder.andWhere('appointment.status = :status', { status });
+      }
+
+      if (user_session_id) {
+        queryBuilder.andWhere('appointment.user_session_id = :user_session_id', { user_session_id });
+      }
+
+      if (start_date) {
+        queryBuilder.andWhere('appointment.scheduled_at >= :start_date', { start_date });
+      }
+
+      if (end_date) {
+        queryBuilder.andWhere('appointment.scheduled_at <= :end_date', { end_date });
+      }
+
+      if (package_id) {
+        queryBuilder.andWhere('package.package_id = :package_id', { package_id });
+      }
+
+      // Paginación
+      queryBuilder.skip(skip).take(limit);
+
+      const [appointments, total] = await queryBuilder.getManyAndCount();
+
+      // Mapear los resultados para incluir información adicional
+      const mappedAppointments = appointments.map(appointment => {
+        const result: any = {
+          appointment_id: appointment.appointment_id,
+          user_id: appointment.user_id,
+          professional_id: appointment.professional_id,
+          service_id: appointment.service_id,
+          user_session_id: appointment.user_session_id,
+          scheduled_at: appointment.scheduled_at,
+          duration_minutes: appointment.duration_minutes,
+          status: appointment.status,
+          amount: appointment.amount,
+          notes: appointment.notes,
+          cancellation_reason: appointment.cancellation_reason,
+          reminder_sent: appointment.reminder_sent,
+          google_calendar_event_id: appointment.google_calendar_event_id,
+          created_at: appointment.created_at,
+          updated_at: appointment.updated_at
+        };
+
+        // Incluir detalles del usuario
+        if (appointment.user) {
+          result.user = {
+            id: appointment.user.id,
+            first_name: appointment.user.first_name,
+            last_name: appointment.user.last_name,
+            email: appointment.user.email,
+            phone: appointment.user.phone
+          };
+        }
+
+        // Incluir detalles del profesional si se solicita
+        if (include_professional_details && appointment.professional) {
+          result.professional = {
+            professional_id: appointment.professional.professional_id,
+            user_id: appointment.professional.user_id,
+            specialization: appointment.professional.specialization,
+            license_number: appointment.professional.license_number,
+            years_experience: appointment.professional.experience_years,
+            bio: appointment.professional.bio,
+            user: appointment.professional.user ? {
+              id: appointment.professional.user.id,
+              first_name: appointment.professional.user.first_name,
+              last_name: appointment.professional.user.last_name,
+              email: appointment.professional.user.email
+            } : null
+          };
+        }
+
+        // Incluir detalles del servicio si se solicita
+        if (include_service_details && appointment.service) {
+          result.service = {
+            service_id: appointment.service.service_id,
+            service_name: appointment.service.service_name,
+            description: appointment.service.description,
+            base_price: appointment.service.base_price,
+            duration_minutes: appointment.service.duration_minutes,
+            category: appointment.service.category,
+            is_active: appointment.service.is_active
+          };
+        }
+
+        // Incluir detalles de la sesión si se solicita
+        if (include_session_details && appointment.user_session) {
+          result.user_session = {
+            user_session_id: appointment.user_session.user_session_id,
+            purchase_id: appointment.user_session.purchase_id,
+            service_id: appointment.user_session.service_id,
+            sessions_remaining: appointment.user_session.sessions_remaining,
+            expires_at: appointment.user_session.expires_at,
+            status: appointment.user_session.status,
+            created_at: appointment.user_session.created_at,
+            purchase: appointment.user_session.purchase ? {
+              purchase_id: appointment.user_session.purchase.purchase_id,
+              amount_paid: appointment.user_session.purchase.amount_paid,
+              purchase_date: appointment.user_session.purchase.purchase_date,
+              payment_status: appointment.user_session.purchase.payment_status,
+              package: appointment.user_session.purchase.package ? {
+                package_id: appointment.user_session.purchase.package.package_id,
+                package_name: appointment.user_session.purchase.package.package_name,
+                description: appointment.user_session.purchase.package.description,
+                total_sessions: appointment.user_session.purchase.package.total_sessions,
+                validity_days: appointment.user_session.purchase.package.validity_days,
+                price: appointment.user_session.purchase.package.price
+              } : null
+            } : null
+          };
+        }
+
+        return result;
+      });
+
+      return { appointments: mappedAppointments, total };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new InternalServerError('Error fetching user appointments with sessions');
     }
   }
 

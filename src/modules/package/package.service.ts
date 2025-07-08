@@ -4,7 +4,8 @@ import { Package } from '../../models/package.model';
 import { Purchase } from '../../models/purchase.model';
 import { Service } from '../../models/service.model';
 import { PackageService as PackageServiceModel } from '../../models/package-service.model';
-import { CreatePackageDto, UpdatePackageDto, PackageResponseDto } from './package.dto';
+import { CreatePackageDto, UpdatePackageDto, PackageResponseDto, UserPackageWithSessionsDto, UserPackageStatus } from './package.dto';
+import { UserSession, UserSessionStatus } from '../../models/user-session.model';
 import { FileUploadService } from '../../utils/file-upload.util';
 
 export class PackageService {
@@ -221,27 +222,56 @@ export class PackageService {
     return packages.map(pkg => this.mapToResponseDto(pkg));
   }
 
-  async getUserPackages(userId: number): Promise<any[]> {
+  async getUserPackages(userId: number): Promise<UserPackageWithSessionsDto[]> {
     const purchaseRepository = AppDataSource.getRepository(Purchase);
+    const userSessionRepository = AppDataSource.getRepository(UserSession);
     
+    // Consulta optimizada con joins para evitar problema N+1
     const userPurchases = await purchaseRepository
       .createQueryBuilder('purchase')
       .leftJoinAndSelect('purchase.package', 'package')
+      .leftJoinAndSelect('purchase.userSessions', 'userSession')
       .where('purchase.user_id = :userId', { userId })
       .andWhere('purchase.payment_status = :status', { status: 'completed' })
       .orderBy('purchase.purchase_date', 'DESC')
       .getMany();
 
-    return userPurchases.map(purchase => ({
-      purchase_id: purchase.purchase_id,
-      amount_paid: purchase.amount_paid,
-      payment_status: purchase.payment_status,
-      payment_method: purchase.payment_method,
-      transaction_id: purchase.transaction_id,
-      purchase_date: purchase.purchase_date,
-      expires_at: purchase.expires_at,
-      package: this.mapToResponseDto(purchase.package)
-    }));
+    return userPurchases.map(purchase => {
+      // Calcular sesiones usadas y restantes
+      const totalSessionsFromPackage = purchase.package.total_sessions;
+      const activeSessions = purchase.userSessions?.filter(session => 
+        session.status === UserSessionStatus.ACTIVE
+      ) || [];
+      
+      const sessionsRemainingTotal = activeSessions.reduce((sum, session) => {
+        return sum + session.sessions_remaining;
+      }, 0);
+      
+      const sessionsUsed = totalSessionsFromPackage - sessionsRemainingTotal;
+      
+      // Determinar estado del paquete
+      let status = UserPackageStatus.ACTIVE;
+      
+      if (sessionsRemainingTotal === 0) {
+        status = UserPackageStatus.EXHAUSTED;
+      } else if (purchase.userSessions?.some(s => s.status === UserSessionStatus.CANCELLED)) {
+        status = UserPackageStatus.CANCELLED;
+      }
+
+      return {
+        purchase_id: purchase.purchase_id,
+        amount_paid: purchase.amount_paid,
+        payment_status: purchase.payment_status,
+        payment_method: purchase.payment_method,
+        transaction_id: purchase.transaction_id,
+        purchase_date: purchase.purchase_date,
+        expires_at: purchase.expires_at,
+        sessions_used: sessionsUsed,
+        sessions_remaining: sessionsRemainingTotal,
+        status: status,
+        package: this.mapToResponseDto(purchase.package)
+      };
+    });
   }
 
   async getAllPackagesWithServices(): Promise<any[]> {

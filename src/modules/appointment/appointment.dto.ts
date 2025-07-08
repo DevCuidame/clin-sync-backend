@@ -133,3 +133,57 @@ export class RescheduleAppointmentDto {
   @IsString()
   reason?: string;
 }
+
+export class UserAppointmentsWithSessionsDto {
+  @IsOptional()
+  @IsNumber()
+  user_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  professional_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  service_id?: number;
+
+  @IsOptional()
+  @IsEnum(AppointmentStatus)
+  status?: AppointmentStatus;
+
+  @IsOptional()
+  @IsDateString()
+  start_date?: string;
+
+  @IsOptional()
+  @IsDateString()
+  end_date?: string;
+
+  @IsOptional()
+  @IsNumber()
+  user_session_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  package_id?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  include_session_details?: boolean = true;
+
+  @IsOptional()
+  @IsBoolean()
+  include_service_details?: boolean = true;
+
+  @IsOptional()
+  @IsBoolean()
+  include_professional_details?: boolean = true;
+
+  @IsOptional()
+  @IsNumber()
+  page?: number = 1;
+
+  @IsOptional()
+  @IsNumber()
+  limit?: number = 10;
+}
