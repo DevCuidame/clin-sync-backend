@@ -15,6 +15,8 @@ import { SystemRoles } from '../../middlewares/role.middleware';
 import {
   CreateTransactionDto,
   CreatePaymentLinkDto,
+  CreateServiceTransactionDto,
+  CreateServicePaymentLinkDto,
   ConfirmTransactionDto,
   CreateRefundDto,
   PaymentHistoryFiltersDto,
@@ -27,10 +29,18 @@ import { WompiService } from './wompi.service';
 import { PaymentTransactionService } from './payment-transaction.service';
 import { AcceptanceTokensService } from './acceptance-tokens.service';
 
-const wompiService = new WompiService();
-const paymentTransactionService = new PaymentTransactionService();
-const acceptanceTokensService = new AcceptanceTokensService();
-const paymentController = new PaymentController(wompiService, paymentTransactionService, acceptanceTokensService);
+// Lazy initialization of services to avoid issues with database connection timing
+let paymentController: PaymentController;
+
+function getPaymentController(): PaymentController {
+  if (!paymentController) {
+    const wompiService = new WompiService();
+    const paymentTransactionService = new PaymentTransactionService();
+    const acceptanceTokensService = new AcceptanceTokensService();
+    paymentController = new PaymentController(wompiService, paymentTransactionService, acceptanceTokensService);
+  }
+  return paymentController;
+}
 
 // Middleware de rate limiting específico para pagos
 const paymentRateLimit = rateLimitMiddleware({
@@ -64,7 +74,7 @@ router.post(
   validateContentType(['application/json']),
   validateBodySize(10 * 1024),
   validateDto(CreateTransactionDto),
-  paymentController.createTransaction
+  getPaymentController().createTransaction
 );
 
 /**
@@ -79,7 +89,37 @@ router.post(
   validateContentType(['application/json']),
   validateBodySize(10 * 1024),
   validateDto(CreatePaymentLinkDto),
-  paymentController.createPaymentLink
+  getPaymentController().createPaymentLink
+);
+
+/**
+ * @route POST /api/payments/services/transactions
+ * @desc Crear una nueva transacción de pago para servicios individuales
+ * @access Private (Usuario autenticado)
+ */
+router.post(
+  '/services/transactions',
+  authMiddleware,
+  paymentRateLimit,
+  validateContentType(['application/json']),
+  validateBodySize(10 * 1024),
+  validateDto(CreateServiceTransactionDto),
+  getPaymentController().createServiceTransaction
+);
+
+/**
+ * @route POST /api/payments/services/payment-links
+ * @desc Crear un link de pago para servicios individuales
+ * @access Private (Usuario autenticado)
+ */
+router.post(
+  '/services/payment-links',
+  authMiddleware,
+  paymentRateLimit,
+  validateContentType(['application/json']),
+  validateBodySize(10 * 1024),
+  validateDto(CreateServicePaymentLinkDto),
+  getPaymentController().createServicePaymentLink
 );
 
 /**
@@ -95,7 +135,7 @@ router.post(
   validateBodySize(5 * 1024),
   validateDto(TransactionIdParamDto, 'params'),
   validateDto(ConfirmTransactionDto),
-  paymentController.confirmTransaction
+  getPaymentController().confirmTransaction
 );
 
 /**
@@ -106,7 +146,7 @@ router.post(
 router.get(
   '/transactions/:transactionId/status',
   authMiddleware,
-  paymentController.getTransactionStatus
+  getPaymentController().getTransactionStatus
 );
 
 /**
@@ -120,7 +160,7 @@ router.post(
   restrictTo([SystemRoles.ADMIN, SystemRoles.PROFESSIONAL]),
   validateDto(CreateRefundDto),
   validateRequest,
-  paymentController.createRefund
+  getPaymentController().createRefund
 );
 
 /**
@@ -134,7 +174,7 @@ router.post(
   validateContentType(['application/json']),
   validateBodySize(1024 * 1024),
   validateDto(WompiWebhookDto),
-  paymentController.handleWebhook
+  getPaymentController().handleWebhook
 );
 
 /**
@@ -144,7 +184,7 @@ router.post(
  */
 router.get(
   '/config',
-  paymentController.getPublicConfig
+  getPaymentController().getPublicConfig
 );
 
 /**
@@ -157,7 +197,7 @@ router.get(
   authMiddleware,
   validateDto(PaymentHistoryFiltersDto, 'query'),
   validateRequest,
-  paymentController.getPaymentHistory
+  getPaymentController().getPaymentHistory
 );
 
 /**
@@ -169,7 +209,7 @@ router.get(
   '/stats',
   authMiddleware,
   restrictTo([SystemRoles.ADMIN, SystemRoles.PROFESSIONAL]),
-  paymentController.getPaymentStats
+  getPaymentController().getPaymentStats
 );
 
 /**
@@ -180,7 +220,7 @@ router.get(
 router.get(
   '/acceptance-tokens',
   authMiddleware,
-  paymentController.getAcceptanceTokens
+  getPaymentController().getAcceptanceTokens
 );
 
 /**
@@ -192,7 +232,7 @@ router.get(
   '/customers/:email',
   authMiddleware,
   restrictTo([SystemRoles.ADMIN, SystemRoles.PROFESSIONAL]),
-  paymentController.getCustomerInfo
+  getPaymentController().getCustomerInfo
 );
 
 // Rutas adicionales para administración

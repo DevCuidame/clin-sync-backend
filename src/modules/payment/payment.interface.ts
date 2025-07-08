@@ -82,6 +82,23 @@ export interface CreateWompiTransactionDto {
   acceptPersonalAuth: string;
 }
 
+export interface CreateWompiServiceTransactionDto {
+  userId: number;
+  serviceId: number;
+  amountInCents: number;
+  currency: WompiCurrency;
+  customerInfo: WompiCustomerInfo;
+  paymentMethod: WompiPaymentMethod;
+  reference: string;
+  redirectUrl?: string;
+  paymentDescription?: string;
+  shippingAddress?: WompiShippingAddress;
+  acceptanceToken: string;
+  acceptPersonalAuth: string;
+  discountPercentage?: number;
+  sessionsQuantity?: number;
+}
+
 export interface CreatePaymentLinkDto {
   userId: number;
   packageId: number;

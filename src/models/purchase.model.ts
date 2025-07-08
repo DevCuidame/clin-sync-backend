@@ -3,6 +3,7 @@ import { User } from './user.model';
 import { Package } from './package.model';
 import { PaymentTransaction } from './payment-transaction.model';
 import { UserSession } from './user-session.model';
+import { Service } from './service.model';
 
 export enum PaymentStatus {
   PENDING = 'pending',
@@ -20,11 +21,24 @@ export class Purchase {
   @Column()
   user_id!: number;
 
-  @Column()
-  package_id!: number;
+  // Hacer package_id opcional
+  @Column({ nullable: true })
+  package_id?: number;
+
+  // Agregar service_id opcional
+  @Column({ nullable: true })
+  service_id?: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount_paid!: number;
+
+  // Agregar campo para tipo de compra
+  @Column({
+    type: 'enum',
+    enum: ['package', 'service'],
+    default: 'package'
+  })
+  purchase_type!: 'package' | 'service';
 
   @Column({
     type: 'enum',
@@ -65,4 +79,9 @@ export class Purchase {
 
   @OneToMany(() => UserSession, userSession => userSession.purchase)
   userSessions!: UserSession[];
+
+  // Relación opcional con Service
+  @ManyToOne(() => Service, { nullable: true })
+  @JoinColumn({ name: 'service_id' })
+  service?: Service;
 }

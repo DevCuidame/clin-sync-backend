@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { PurchaseService } from './purchase.service';
 import { PurchaseSessionService } from './purchase-session.service';
-import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto, CreateServicePurchaseDto } from './purchase.dto';
 import { validateCashPurchase, sanitizeCashPurchaseData } from './validation/cash-purchase.validation';
 import { WompiCurrency } from '../payment/payment.interface';
 
@@ -492,6 +492,21 @@ export class PurchaseController {
         message: 'Error interno del servidor',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  };
+
+  createServicePurchase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const purchaseData: CreateServicePurchaseDto = req.body;
+      const purchase = await this.purchaseService.createServicePurchase(purchaseData);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Compra de servicio creada exitosamente',
+        data: purchase
+      });
+    } catch (error) {
+      next(error);
     }
   };
 }

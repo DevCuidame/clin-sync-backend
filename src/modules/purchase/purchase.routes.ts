@@ -37,4 +37,7 @@ router.post('/:id/confirm-cash', purchaseController.confirmCashPayment);
 router.post('/:id/reject-cash', purchaseController.rejectCashPayment);
 router.get('/cash/pending', purchaseController.getPendingCashPayments);
 
+// Agregar nueva ruta para compra de servicios
+router.post('/service', purchaseController.createServicePurchase);
+
 export default router;

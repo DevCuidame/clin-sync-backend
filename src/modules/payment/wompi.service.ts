@@ -22,7 +22,8 @@ import {
   WompiEventType,
   WompiError,
   WompiErrorResponse,
-  WOMPI_CONSTANTS
+  WOMPI_CONSTANTS,
+  CreateWompiServiceTransactionDto
 } from './payment.interface';
 import { getWompiConfig, validateWompiAmount, convertToWompiCurrency } from '../../config/wompi.config';
 import logger from '../../utils/logger';
@@ -31,6 +32,7 @@ import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { PaymentTransaction, TransactionStatus } from '../../models/payment-transaction.model';
 import { PaymentWebhook } from '../../models/payment-webhook.model';
 import { Package } from '../../models/package.model';
+import { Service } from '../../models/service.model';
 import { User } from '../../models/user.model';
 import { PackageService } from '../../models/package-service.model';
 import { UserSession, UserSessionStatus } from '../../models/user-session.model';
@@ -111,7 +113,7 @@ export class WompiService {
   /**
    * Crea una transacción de pago en Wompi
    */
-  async createTransaction(dto: CreateWompiTransactionDto, isRetry: boolean = false): Promise<PaymentResponseDto> {
+  async createTransaction(dto: CreateWompiTransactionDto | CreateWompiServiceTransactionDto, isRetry: boolean = false): Promise<PaymentResponseDto> {
     // Validar monto
     const amountValidation = validateWompiAmount(dto.amountInCents, dto.currency);
     if (!amountValidation.isValid) {
@@ -220,7 +222,7 @@ export class WompiService {
   /**
    * Crea un link de pago en Wompi
    */
-  async createPaymentLink(dto: CreatePaymentLinkDto): Promise<PaymentResponseDto> {
+  async createPaymentLink(dto: CreatePaymentLinkDto | CreateWompiServiceTransactionDto): Promise<PaymentResponseDto> {
     try {
       // Validar monto
       const amountValidation = validateWompiAmount(dto.amountInCents, dto.currency);
@@ -237,14 +239,17 @@ export class WompiService {
         acceptPersonalAuth: dto.acceptPersonalAuth
       });
 
+      // Type guard to check if it's CreatePaymentLinkDto
+      const isPaymentLinkDto = 'description' in dto;
+      
       const paymentLinkData = {
-        name: `Pago - ${dto.description}`,
-        description: dto.description,
+        name: isPaymentLinkDto ? `Pago - ${(dto as CreatePaymentLinkDto).description}` : `Pago de Servicio`,
+        description: isPaymentLinkDto ? (dto as CreatePaymentLinkDto).description : 'Pago de servicio individual',
         single_use: true,
-        collect_shipping: dto.collectShipping || false,
+        collect_shipping: isPaymentLinkDto ? ((dto as CreatePaymentLinkDto).collectShipping || false) : false,
         currency: dto.currency,
         amount_in_cents: dto.amountInCents,
-        expires_at: dto.expiresAt?.toISOString(),
+        expires_at: isPaymentLinkDto ? (dto as CreatePaymentLinkDto).expiresAt?.toISOString() : undefined,
         redirect_url: dto.redirectUrl,
         customer_data: {
           email: dto.customerInfo.email,
@@ -417,26 +422,63 @@ export class WompiService {
 
   // Métodos privados
 
-  private async createPurchaseRecord(dto: CreateWompiTransactionDto): Promise<Purchase> {
+  private async createPurchaseRecord(dto: CreateWompiTransactionDto | CreateWompiServiceTransactionDto | any): Promise<Purchase> {
     const purchaseRepository = AppDataSource.getRepository(Purchase);
     const packageRepository = AppDataSource.getRepository(Package);
+    const serviceRepository = AppDataSource.getRepository(Service);
     const userRepository = AppDataSource.getRepository(User);
 
     const user = await userRepository.findOne({ where: { id: dto.userId } });
-    const packageEntity = await packageRepository.findOne({ where: { package_id: dto.packageId } });
-
-    if (!user || !packageEntity) {
-      throw new Error('Usuario o paquete no encontrado');
+    if (!user) {
+      throw new Error('Usuario no encontrado');
     }
 
-    const purchase = purchaseRepository.create({
-      user,
-      package: packageEntity,
-      amount_paid: dto.amountInCents / 100,
-      payment_status: PaymentStatus.PENDING,
-      payment_method: dto.paymentMethod,
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
-    });
+    let purchase: Purchase;
+    
+    // Verificar si es compra de paquete o servicio
+    if (dto.packageId) {
+      // Compra de paquete
+      const packageEntity = await packageRepository.findOne({ where: { package_id: dto.packageId } });
+      if (!packageEntity) {
+        throw new Error('Paquete no encontrado');
+      }
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + packageEntity.validity_days);
+
+      purchase = purchaseRepository.create({
+        user,
+        package: packageEntity,
+        package_id: dto.packageId,
+        purchase_type: 'package',
+        amount_paid: dto.amountInCents / 100,
+        payment_status: PaymentStatus.PENDING,
+        payment_method: dto.paymentMethod,
+        expires_at: expiresAt
+      });
+    } else if (dto.serviceId) {
+      // Compra de servicio
+      const serviceEntity = await serviceRepository.findOne({ where: { service_id: dto.serviceId } });
+      if (!serviceEntity) {
+        throw new Error('Servicio no encontrado');
+      }
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30 días por defecto para servicios
+
+      purchase = purchaseRepository.create({
+        user,
+        service: serviceEntity,
+        service_id: dto.serviceId,
+        purchase_type: 'service',
+        amount_paid: dto.amountInCents / 100,
+        payment_status: PaymentStatus.PENDING,
+        payment_method: dto.paymentMethod,
+        expires_at: expiresAt
+      });
+    } else {
+      throw new Error('Debe especificar packageId o serviceId');
+    }
 
     return await purchaseRepository.save(purchase);
   }
@@ -649,30 +691,61 @@ export class WompiService {
          return;
        }
        
-       // Obtener servicios del paquete
-       const packageServices = await packageServiceRepository.find({
-         where: { package_id: purchase.package_id },
-         relations: ['service']
-       });
-       
-       // Crear una sesión por cada servicio del paquete
-       for (const packageService of packageServices) {
-         const session = userSessionRepository.create({
-           purchase_id: purchase.purchase_id,
-           service_id: packageService.service_id,
-           sessions_remaining: packageService.sessions_included,
-           expires_at: purchase.expires_at,
-           status: UserSessionStatus.ACTIVE
+       if (purchase.purchase_type === 'package' && purchase.package_id) {
+         // Compra de paquete - crear sesiones basadas en los servicios del paquete
+         const packageServices = await packageServiceRepository.find({
+           where: { package_id: purchase.package_id },
+           relations: ['service']
          });
          
-         await userSessionRepository.save(session);
+         // Crear una sesión por cada servicio del paquete
+         for (const packageService of packageServices) {
+           const session = userSessionRepository.create({
+             purchase_id: purchase.purchase_id,
+             service_id: packageService.service_id,
+             sessions_remaining: packageService.sessions_included,
+             expires_at: purchase.expires_at,
+             status: UserSessionStatus.ACTIVE
+           });
+           
+           await userSessionRepository.save(session);
+         }
+         
+         logger.info('Sessions created automatically for package purchase', {
+           purchaseId: purchase.purchase_id,
+           packageId: purchase.package_id,
+           servicesCount: packageServices.length
+         });
+         
+       } else if (purchase.purchase_type === 'service' && purchase.service_id) {
+         // Compra de servicio individual - crear una sesión para el servicio
+         const sessionsQuantity = (purchase.payment_details?.sessions_quantity as number) || 1;
+         
+         for (let i = 0; i < sessionsQuantity; i++) {
+           const session = userSessionRepository.create({
+             purchase_id: purchase.purchase_id,
+             service_id: purchase.service_id,
+             sessions_remaining: 1, // Una sesión por cada registro
+             expires_at: purchase.expires_at,
+             status: UserSessionStatus.ACTIVE
+           });
+           
+           await userSessionRepository.save(session);
+         }
+         
+         logger.info('Sessions created automatically for service purchase', {
+           purchaseId: purchase.purchase_id,
+           serviceId: purchase.service_id,
+           sessionsQuantity
+         });
+       } else {
+         logger.warn('Purchase type not recognized or missing IDs', {
+           purchaseId: purchase.purchase_id,
+           purchaseType: purchase.purchase_type,
+           packageId: purchase.package_id,
+           serviceId: purchase.service_id
+         });
        }
-       
-       logger.info('Sessions created automatically for purchase', {
-         purchaseId: purchase.purchase_id,
-         packageId: purchase.package_id,
-         servicesCount: packageServices.length
-       });
        
      } catch (error) {
        logger.error('Error creating sessions for purchase', {

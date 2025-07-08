@@ -3,18 +3,23 @@ import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { User } from '../../models/user.model';
 import { Package } from '../../models/package.model';
-import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto, CreateServicePurchaseDto } from './purchase.dto';
 import { WompiPaymentMethod } from '../payment/payment.interface';
+import { Service } from '../../models/service.model';
+import { UserSession, UserSessionStatus } from '../../models/user-session.model';
+import { PurchaseValidation } from './purchase.validation';
 
 export class PurchaseService {
   private purchaseRepository: Repository<Purchase>;
   private userRepository: Repository<User>;
   private packageRepository: Repository<Package>;
+  private serviceRepository: Repository<Service>;
 
   constructor() {
     this.purchaseRepository = AppDataSource.getRepository(Purchase);
     this.userRepository = AppDataSource.getRepository(User);
     this.packageRepository = AppDataSource.getRepository(Package);
+    this.serviceRepository = AppDataSource.getRepository(Service);
   }
 
   async createPurchase(purchaseData: CreatePurchaseDto): Promise<PurchaseResponseDto> {
@@ -34,6 +39,12 @@ export class PurchaseService {
       throw new Error('Package not found');
     }
 
+    // Validar datos de compra
+    const validation = PurchaseValidation.validatePurchaseData(purchaseData, packageData);
+    if (!validation.isValid) {
+      throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+    }
+
     // Calculate expires_at based on package validity
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + packageData.validity_days);
@@ -41,6 +52,7 @@ export class PurchaseService {
     const newPurchase = this.purchaseRepository.create({
       user_id: purchaseData.user_id,
       package_id: purchaseData.package_id,
+      purchase_type: 'package',
       amount_paid: purchaseData.amount_paid,
       payment_status: purchaseData.payment_status || PaymentStatus.PENDING,
       payment_method: purchaseData.payment_method,
@@ -294,12 +306,87 @@ export class PurchaseService {
     return purchases.map(purchase => this.mapToResponseDto(purchase));
   }
 
+  async createServicePurchase(purchaseData: CreateServicePurchaseDto, discountPercentage?: number): Promise<PurchaseResponseDto> {
+    // Verificar que el usuario existe
+    const user = await this.userRepository.findOne({
+      where: { id: purchaseData.user_id }
+    });
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verificar que el servicio existe
+    const service = await this.serviceRepository.findOne({
+      where: { service_id: purchaseData.service_id }
+    });
+    if (!service) {
+      throw new Error('Service not found');
+    }
+
+    // Validar datos de compra de servicio
+    const validation = PurchaseValidation.validateServicePurchaseData(purchaseData, service, discountPercentage);
+    if (!validation.isValid) {
+      throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+    }
+
+    // Calcular fecha de expiración (por ejemplo, 30 días por defecto)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    // Preparar detalles de pago con información de descuento si aplica
+    const paymentDetails = {
+      ...purchaseData.payment_details,
+      original_price: Number(service.base_price),
+      discount_percentage: discountPercentage || 0,
+      final_price: purchaseData.amount_paid
+    };
+
+    const purchase = this.purchaseRepository.create({
+      user_id: purchaseData.user_id,
+      service_id: purchaseData.service_id,
+      purchase_type: 'service',
+      amount_paid: purchaseData.amount_paid,
+      payment_status: purchaseData.payment_status || PaymentStatus.PENDING,
+      payment_method: purchaseData.payment_method,
+      transaction_id: purchaseData.transaction_id,
+      expires_at: expiresAt,
+      payment_details: paymentDetails
+    });
+
+    const savedPurchase = await this.purchaseRepository.save(purchase);
+
+    // Crear sesiones de usuario para el servicio comprado
+    if (savedPurchase.payment_status === PaymentStatus.COMPLETED) {
+      await this.createSessionsForServicePurchase(savedPurchase, purchaseData.sessions_quantity || 1);
+    }
+
+    return this.mapToResponseDto(savedPurchase);
+  }
+
+  private async createSessionsForServicePurchase(purchase: Purchase, sessionsQuantity: number): Promise<void> {
+    const userSessionRepository = AppDataSource.getRepository(UserSession);
+    
+    for (let i = 0; i < sessionsQuantity; i++) {
+      const userSession = userSessionRepository.create({
+        service_id: purchase.service_id,
+        purchase_id: purchase.purchase_id,
+        status: UserSessionStatus.ACTIVE,
+        expires_at: purchase.expires_at
+      });
+      
+      await userSessionRepository.save(userSession);
+    }
+  }
+
+  // Actualizar método existente para manejar ambos tipos
   private mapToResponseDto(purchase: Purchase): PurchaseResponseDto {
     return {
       purchase_id: purchase.purchase_id,
       user_id: purchase.user_id,
       package_id: purchase.package_id,
-      amount_paid: purchase.amount_paid,
+      service_id: purchase.service_id,
+      purchase_type: purchase.purchase_type,
+      amount_paid: Number(purchase.amount_paid),
       payment_status: purchase.payment_status,
       payment_method: purchase.payment_method || '',
       transaction_id: purchase.transaction_id,
@@ -315,9 +402,18 @@ export class PurchaseService {
       package: purchase.package ? {
         package_id: purchase.package.package_id,
         package_name: purchase.package.package_name,
-        price: purchase.package.price,
+        description: purchase.package.description,
+        price: Number(purchase.package.price),
         total_sessions: purchase.package.total_sessions,
-        validity_days: purchase.package.validity_days
+        validity_days: purchase.package.validity_days,
+      } : undefined,
+      service: purchase.service ? {
+        service_id: purchase.service.service_id,
+        service_name: purchase.service.service_name,
+        description: purchase.service.description,
+        base_price: Number(purchase.service.base_price),
+        duration_minutes: purchase.service.duration_minutes,
+        category: purchase.service.category
       } : undefined
     };
   }

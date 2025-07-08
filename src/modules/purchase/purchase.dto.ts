@@ -20,10 +20,23 @@ export interface UpdatePurchaseDto {
   payment_details?: any;
 }
 
+export interface CreateServicePurchaseDto {
+  user_id: number;
+  service_id: number;
+  amount_paid: number;
+  payment_status?: PaymentStatus;
+  payment_method: string;
+  transaction_id?: string;
+  payment_details?: any;
+  sessions_quantity?: number; // Para servicios que permiten múltiples sesiones
+}
+
 export interface PurchaseResponseDto {
   purchase_id: number;
   user_id: number;
-  package_id: number;
+  package_id?: number;
+  service_id?: number;
+  purchase_type: 'package' | 'service';
   amount_paid: number;
   payment_status: PaymentStatus;
   payment_method: string;
@@ -40,9 +53,18 @@ export interface PurchaseResponseDto {
   package?: {
     package_id: number;
     package_name: string;
+    description?: string;
     price: number;
     total_sessions: number;
     validity_days: number;
+  };
+  service?: {
+    service_id: number;
+    service_name: string;
+    description?: string;
+    base_price: number;
+    duration_minutes: number;
+    category: string;
   };
 }
 

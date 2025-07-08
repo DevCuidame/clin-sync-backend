@@ -135,16 +135,20 @@ CREATE TABLE package_services (
 CREATE TABLE purchases (
     purchase_id SERIAL PRIMARY KEY,
     user_id INT NOT NULL,
-    package_id INT NOT NULL,
+    package_id INT,
+    service_id INT,
+    purchase_type VARCHAR(20) CHECK (purchase_type IN ('package', 'service')) DEFAULT 'package',
     amount_paid DECIMAL(10, 2) NOT NULL,
     payment_status VARCHAR(20) CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded', 'cancelled')) DEFAULT 'pending',
     payment_method VARCHAR(50),
     transaction_id VARCHAR(255),
     purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
     payment_details JSONB,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (package_id) REFERENCES packages(package_id) ON DELETE RESTRICT
+    FOREIGN KEY (package_id) REFERENCES packages(package_id) ON DELETE RESTRICT,
+    FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE RESTRICT
 );
 
 -- Tabla de transacciones de pago
@@ -183,7 +187,7 @@ CREATE TABLE payment_webhooks (
 -- Tabla de sesiones de usuario
 CREATE TABLE user_sessions (
     user_session_id SERIAL PRIMARY KEY,
-    purchase_id INT NOT NULL,
+    purchase_id INT,
     service_id INT NOT NULL,
     sessions_remaining INT NOT NULL,
     expires_at TIMESTAMP NOT NULL,

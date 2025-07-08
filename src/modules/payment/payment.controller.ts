@@ -16,9 +16,14 @@ import {
   CreateRefundDto,
   PaymentHistoryFiltersDto,
 } from './dto/payment.dto';
-import { WompiTransactionStatus, WompiCurrency, CreateWompiTransactionDto, CreatePaymentLinkDto as WompiPaymentLinkDto } from './payment.interface';
+import { WompiTransactionStatus, WompiCurrency, WompiPaymentMethod, CreateWompiTransactionDto, CreateWompiServiceTransactionDto, CreatePaymentLinkDto as WompiPaymentLinkDto, ConfirmTransactionDto as WompiConfirmTransactionDto, RefundTransactionDto as WompiRefundTransactionDto, PaymentHistoryFilterDto as WompiPaymentHistoryFilterDto, WompiWebhookEvent } from './payment.interface';
+import {
+  CreateServiceTransactionDto,
+  CreateServicePaymentLinkDto
+} from './dto/payment.dto';
 import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
+import { Service } from '../../models/service.model';
 
 // Utility function to handle async errors
 const catchAsync = (fn: Function) => {
@@ -42,6 +47,8 @@ export class PaymentController {
     this.getPaymentHistory = this.getPaymentHistory.bind(this);
     this.getPaymentStats = this.getPaymentStats.bind(this);
     this.getAcceptanceTokens = this.getAcceptanceTokens.bind(this);
+    this.createServiceTransaction = this.createServiceTransaction.bind(this);
+    this.createServicePaymentLink = this.createServicePaymentLink.bind(this);
   }
 
 
@@ -487,6 +494,182 @@ export class PaymentController {
       }
     });
   });
+
+  /**
+   * Crea una transacción para un servicio individual
+   */
+  async createServiceTransaction(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const transactionData: CreateServiceTransactionDto = req.body;
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        throw new BadRequestError('Usuario no autenticado');
+      }
+
+      // Validar que el servicio existe y está activo
+      const serviceRepository = AppDataSource.getRepository(Service);
+      const service = await serviceRepository.findOne({
+        where: { service_id: transactionData.serviceId, is_active: true }
+      });
+
+      if (!service) {
+        throw new BadRequestError('Servicio no encontrado o inactivo');
+      }
+
+      // Calcular precio esperado
+      const servicePrice = Number(service.base_price);
+      const discountedPrice = transactionData.discountPercentage 
+        ? servicePrice * (1 - transactionData.discountPercentage / 100)
+        : servicePrice;
+      const totalExpectedPrice = discountedPrice * transactionData.sessionsQuantity;
+
+      // Validar precio con tolerancia de 0.01
+      const tolerance = 0.01;
+      const priceDifference = Math.abs(transactionData.amount - totalExpectedPrice);
+      
+      if (priceDifference > tolerance) {
+        throw new BadRequestError(
+          `El precio especificado (${transactionData.amount}) no coincide con el precio esperado ` +
+          `(${totalExpectedPrice} = ${discountedPrice} × ${transactionData.sessionsQuantity} sesiones)`
+        );
+      }
+
+      logger.info('Creating service transaction', {
+        userId,
+        serviceId: transactionData.serviceId,
+        amount: transactionData.amount,
+        sessionsQuantity: transactionData.sessionsQuantity,
+        expectedPrice: totalExpectedPrice
+      });
+
+      // Transform DTO to match service interface
+      const wompiServiceTransactionData: CreateWompiServiceTransactionDto = {
+        userId,
+        serviceId: transactionData.serviceId,
+        amountInCents: Math.round(transactionData.amount * 100),
+        currency: transactionData.currency || WompiCurrency.COP,
+        customerInfo: transactionData.customerInfo,
+        paymentMethod: transactionData.paymentMethod || WompiPaymentMethod.CARD,
+        reference: `service_txn_${Date.now()}_${userId}_${Math.random().toString(36).substr(2, 9)}`,
+
+        paymentDescription: transactionData.description || `Servicio ${service.service_name} - ${transactionData.sessionsQuantity} sesiones`,
+        shippingAddress: transactionData.shippingAddress ? {
+          addressLine1: transactionData.shippingAddress.addressLine,
+          region: transactionData.shippingAddress.state || transactionData.shippingAddress.city,
+          city: transactionData.shippingAddress.city,
+          country: transactionData.shippingAddress.country,
+          name: transactionData.customerInfo.fullName,
+          phoneNumber: transactionData.customerInfo.phoneNumber || ''
+        } : undefined,
+        acceptanceToken: transactionData.acceptanceToken,
+        acceptPersonalAuth: transactionData.acceptPersonalAuth,
+        discountPercentage: transactionData.discountPercentage,
+        sessionsQuantity: transactionData.sessionsQuantity
+      };
+
+      const result = await this.wompiService.createTransaction(wompiServiceTransactionData);
+
+      logger.info('Service transaction created successfully', {
+        transactionId: result.transactionId,
+        serviceId: transactionData.serviceId,
+        userId
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Transacción de servicio creada exitosamente',
+        data: result
+      });
+    } catch (error) {
+      logger.error('Error creating service transaction', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Crea un link de pago para un servicio individual
+   */
+  async createServicePaymentLink(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const linkData: CreateServicePaymentLinkDto = req.body;
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        throw new BadRequestError('Usuario no autenticado');
+      }
+
+      // Validar que el servicio existe y está activo
+      const serviceRepository = AppDataSource.getRepository(Service);
+      const service = await serviceRepository.findOne({
+        where: { service_id: linkData.serviceId, is_active: true }
+      });
+
+      if (!service) {
+        throw new BadRequestError('Servicio no encontrado o inactivo');
+      }
+
+      // Calcular precio esperado
+      const servicePrice = Number(service.base_price);
+      const discountedPrice = linkData.discountPercentage 
+        ? servicePrice * (1 - linkData.discountPercentage / 100)
+        : servicePrice;
+      const totalExpectedPrice = discountedPrice * linkData.sessionsQuantity;
+
+      // Validar precio con tolerancia de 0.01
+      const tolerance = 0.01;
+      const priceDifference = Math.abs(linkData.amount - totalExpectedPrice);
+      
+      if (priceDifference > tolerance) {
+        throw new BadRequestError(
+          `El precio especificado (${linkData.amount}) no coincide con el precio esperado ` +
+          `(${totalExpectedPrice} = ${discountedPrice} × ${linkData.sessionsQuantity} sesiones)`
+        );
+      }
+
+      logger.info('Creating service payment link', {
+        userId,
+        serviceId: linkData.serviceId,
+        amount: linkData.amount,
+        sessionsQuantity: linkData.sessionsQuantity,
+        expectedPrice: totalExpectedPrice
+      });
+
+      // Transform DTO to match service interface
+      const wompiServiceLinkData: CreateWompiServiceTransactionDto = {
+        userId,
+        serviceId: linkData.serviceId,
+        amountInCents: Math.round(linkData.amount * 100),
+        currency: linkData.currency || WompiCurrency.COP,
+        customerInfo: linkData.customerInfo,
+        paymentMethod: WompiPaymentMethod.CARD,
+        reference: `service_link_${Date.now()}_${userId}_${Math.random().toString(36).substr(2, 9)}`,
+        redirectUrl: linkData.redirectUrls?.success,
+        paymentDescription: linkData.description || `Servicio ${service.service_name} - ${linkData.sessionsQuantity} sesiones`,
+        acceptanceToken: linkData.acceptanceToken,
+        acceptPersonalAuth: linkData.acceptPersonalAuth,
+        discountPercentage: linkData.discountPercentage,
+        sessionsQuantity: linkData.sessionsQuantity
+      };
+
+      const result = await this.wompiService.createPaymentLink(wompiServiceLinkData);
+
+      logger.info('Service payment link created successfully', {
+        paymentLinkId: result.paymentLinkId,
+        serviceId: linkData.serviceId,
+        userId
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Link de pago de servicio creado exitosamente',
+        data: result
+      });
+    } catch (error) {
+      logger.error('Error creating service payment link', error);
+      next(error);
+    }
+  }
 
   /**
    * Obtiene los tokens de aceptación de Wompi

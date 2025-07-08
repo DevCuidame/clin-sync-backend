@@ -398,3 +398,133 @@ export class WebhookHeadersDto {
   @IsString({ message: 'El ID del evento debe ser una cadena' })
   'x-event-id'?: string;
 }
+
+/**
+ * DTO para crear una transacción de servicio individual
+ */
+export class CreateServiceTransactionDto {
+  @IsInt({ message: 'El ID del servicio debe ser un número entero' })
+  @IsPositive({ message: 'El ID del servicio debe ser positivo' })
+  serviceId!: number;
+
+  @IsInt({ message: 'La cantidad de sesiones debe ser un número entero' })
+  @IsPositive({ message: 'La cantidad de sesiones debe ser positiva' })
+  @Min(1, { message: 'Debe especificar al menos 1 sesión' })
+  @Max(50, { message: 'Máximo 50 sesiones por compra' })
+  sessionsQuantity!: number;
+
+  @IsNumber({}, { message: 'El monto debe ser un número' })
+  @IsPositive({ message: 'El monto debe ser positivo' })
+  @Min(1000, { message: 'El monto mínimo es $1,000 COP' })
+  @Max(50000000, { message: 'El monto máximo es $50,000,000 COP' })
+  @Transform(({ value }) => Math.round(value * 100) / 100)
+  amount!: number;
+
+  @IsEnum(WompiCurrency, { message: 'Moneda no soportada' })
+  currency!: WompiCurrency;
+
+  @IsEnum(WompiPaymentMethod, { message: 'Método de pago no soportado' })
+  paymentMethod!: WompiPaymentMethod;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'El porcentaje de descuento debe ser un número' })
+  @Min(0, { message: 'El descuento no puede ser negativo' })
+  @Max(100, { message: 'El descuento no puede ser mayor al 100%' })
+  discountPercentage?: number;
+
+  @ValidateNested()
+  @Type(() => CustomerInfoDto)
+  customerInfo!: CustomerInfoDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ShippingAddressDto)
+  shippingAddress?: ShippingAddressDto;
+
+  @IsOptional()
+  @IsString({ message: 'La descripción debe ser una cadena' })
+  @Length(1, 255, { message: 'La descripción debe tener entre 1 y 255 caracteres' })
+  description?: string;
+
+  @IsOptional()
+  @IsObject({ message: 'Los metadatos deben ser un objeto' })
+  metadata?: Record<string, any>;
+
+  @IsString({ message: 'El token de aceptación debe ser una cadena' })
+  @IsNotEmpty({ message: 'El token de aceptación es obligatorio' })
+  acceptanceToken!: string;
+
+  @IsString({ message: 'El token de autorización de datos personales debe ser una cadena' })
+  @IsNotEmpty({ message: 'El token de autorización de datos personales es obligatorio' })
+  acceptPersonalAuth!: string;
+}
+
+/**
+ * DTO para crear un enlace de pago de servicio individual
+ */
+export class CreateServicePaymentLinkDto {
+  @IsInt({ message: 'El ID del servicio debe ser un número entero' })
+  @IsPositive({ message: 'El ID del servicio debe ser positivo' })
+  serviceId!: number;
+
+  @IsInt({ message: 'La cantidad de sesiones debe ser un número entero' })
+  @IsPositive({ message: 'La cantidad de sesiones debe ser positiva' })
+  @Min(1, { message: 'Debe especificar al menos 1 sesión' })
+  @Max(50, { message: 'Máximo 50 sesiones por compra' })
+  sessionsQuantity!: number;
+
+  @IsNumber({}, { message: 'El monto debe ser un número' })
+  @IsPositive({ message: 'El monto debe ser positivo' })
+  @Min(1000, { message: 'El monto mínimo es $1,000 COP' })
+  @Max(50000000, { message: 'El monto máximo es $50,000,000 COP' })
+  @Transform(({ value }) => Math.round(value * 100) / 100)
+  amount!: number;
+
+  @IsEnum(WompiCurrency, { message: 'Moneda no soportada' })
+  currency!: WompiCurrency;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'El porcentaje de descuento debe ser un número' })
+  @Min(0, { message: 'El descuento no puede ser negativo' })
+  @Max(100, { message: 'El descuento no puede ser mayor al 100%' })
+  discountPercentage?: number;
+
+  @IsString({ message: 'La descripción es requerida' })
+  @Length(5, 255, { message: 'La descripción debe tener entre 5 y 255 caracteres' })
+  description!: string;
+
+  @ValidateNested()
+  @Type(() => CustomerInfoDto)
+  customerInfo!: CustomerInfoDto;
+
+  @ValidateNested()
+  @Type(() => RedirectUrlsDto)
+  redirectUrls!: RedirectUrlsDto;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'Fecha de expiración inválida' })
+  expiresAt?: string;
+
+  @IsOptional()
+  @IsArray({ message: 'Los métodos de pago deben ser un array' })
+  @ArrayMinSize(1, { message: 'Debe especificar al menos un método de pago' })
+  @IsEnum(WompiPaymentMethod, { each: true, message: 'Método de pago inválido' })
+  paymentMethods?: WompiPaymentMethod[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ShippingAddressDto)
+  shippingAddress?: ShippingAddressDto;
+
+  @IsOptional()
+  @IsObject({ message: 'Los metadatos deben ser un objeto' })
+  metadata?: Record<string, any>;
+
+  @IsString({ message: 'El token de aceptación debe ser una cadena' })
+  @IsNotEmpty({ message: 'El token de aceptación es obligatorio' })
+  acceptanceToken!: string;
+
+  @IsString({ message: 'El token de autorización de datos personales debe ser una cadena' })
+  @IsNotEmpty({ message: 'El token de autorización de datos personales es obligatorio' })
+  acceptPersonalAuth!: string;
+}
