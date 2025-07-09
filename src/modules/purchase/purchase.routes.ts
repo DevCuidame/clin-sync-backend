@@ -16,6 +16,9 @@ router.get('/:id', purchaseController.getPurchaseById);
 router.put('/:id', purchaseController.updatePurchase);
 
 // User-specific purchase routes
+// IMPORTANT: More specific routes must come before parameterized routes
+router.get('/user/services', purchaseController.getUserServicePurchases);
+router.get('/user/purchase/:id/details', purchaseController.getUserPurchaseDetails);
 router.get('/user/:userId', purchaseController.getUserPurchases);
 router.get('/user/:userId/active', purchaseController.getActivePurchases);
 

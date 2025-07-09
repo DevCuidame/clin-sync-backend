@@ -141,6 +141,45 @@ export class PurchaseController {
     }
   };
 
+  getUserServicePurchases = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'No autorizado',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
+      // Ensure userId is a number
+      const userIdNumber = typeof userId === 'string' ? parseInt(userId) : userId;
+      
+      if (isNaN(userIdNumber)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de usuario inválido',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
+      const servicePurchases = await this.purchaseService.getServicePurchasesByUserId(userIdNumber);
+      res.status(200).json({
+        success: true,
+        data: servicePurchases
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching user service purchases',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
   updatePurchase = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -507,6 +546,66 @@ export class PurchaseController {
       });
     } catch (error) {
       next(error);
+    }
+  };
+
+  /**
+   * Obtener información completa de una compra específica con todas sus relaciones
+   */
+  getUserPurchaseDetails = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'No autorizado',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
+      const purchaseId = parseInt(id);
+      if (isNaN(purchaseId)) {
+        res.status(400).json({
+          success: false,
+          message: 'ID de compra inválido'
+        });
+        return;
+      }
+
+      const purchaseDetails = await this.purchaseService.getPurchaseWithCompleteDetails(purchaseId);
+      
+      if (!purchaseDetails) {
+        res.status(404).json({
+          success: false,
+          message: 'Compra no encontrada'
+        });
+        return;
+      }
+
+      // Verificar que la compra pertenece al usuario autenticado
+      const userIdNumber = typeof userId === 'string' ? parseInt(userId) : userId;
+      if (purchaseDetails.user_id !== userIdNumber) {
+        res.status(403).json({
+          success: false,
+          message: 'No tiene permisos para acceder a esta compra'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Detalles de compra obtenidos exitosamente',
+        data: purchaseDetails
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error obteniendo detalles de la compra',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   };
 }

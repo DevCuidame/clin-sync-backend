@@ -146,10 +146,109 @@ export class PurchaseService {
     return this.mapToResponseDto(purchase);
   }
 
+  async getPurchaseWithCompleteDetails(purchaseId: number): Promise<any | null> {
+    const purchase = await this.purchaseRepository
+      .createQueryBuilder('purchase')
+      .leftJoinAndSelect('purchase.user', 'user')
+      .leftJoinAndSelect('purchase.package', 'package')
+      .leftJoinAndSelect('purchase.service', 'service')
+      .leftJoinAndSelect('purchase.userSessions', 'sessions')
+      .leftJoinAndSelect('sessions.service', 'sessionService')
+      .leftJoinAndSelect('purchase.payment_transactions', 'transactions')
+      .where('purchase.purchase_id = :purchaseId', { purchaseId })
+      .getOne();
+
+    if (!purchase) {
+      return null;
+    }
+
+    // Mapear a un formato más completo
+    return {
+      purchase_id: purchase.purchase_id,
+      user_id: purchase.user_id,
+      package_id: purchase.package_id,
+      service_id: purchase.service_id,
+      amount_paid: purchase.amount_paid,
+      purchase_type: purchase.purchase_type,
+      payment_status: purchase.payment_status,
+      payment_method: purchase.payment_method,
+      transaction_id: purchase.transaction_id,
+      purchase_date: purchase.purchase_date,
+      updated_at: purchase.updated_at,
+      expires_at: purchase.expires_at,
+      payment_details: purchase.payment_details,
+      user: purchase.user ? {
+        id: purchase.user.id,
+        email: purchase.user.email,
+        first_name: purchase.user.first_name,
+        last_name: purchase.user.last_name,
+        phone: purchase.user.phone
+      } : null,
+      package: purchase.package ? {
+        package_id: purchase.package.package_id,
+        package_name: purchase.package.package_name,
+        description: purchase.package.description,
+        price: purchase.package.price,
+        total_sessions: purchase.package.total_sessions,
+        validity_days: purchase.package.validity_days,
+        discount_percentage: purchase.package.discount_percentage,
+        is_active: purchase.package.is_active,
+        terms_conditions: purchase.package.terms_conditions,
+        image_url: purchase.package.image_url
+      } : null,
+      service: purchase.service ? {
+        service_id: purchase.service.service_id,
+        service_name: purchase.service.service_name,
+        description: purchase.service.description,
+        base_price: purchase.service.base_price,
+        duration_minutes: purchase.service.duration_minutes,
+        is_active: purchase.service.is_active
+      } : null,
+      sessions: purchase.userSessions ? purchase.userSessions.map(session => ({
+        session_id: session.user_session_id,
+        purchase_id: session.purchase_id,
+        service_id: session.service_id,
+        status: session.status,
+        created_at: session.created_at,
+        expires_at: session.expires_at,
+        service: session.service ? {
+          service_id: session.service.service_id,
+          service_name: session.service.service_name,
+          description: session.service.description,
+          base_price: session.service.base_price,
+          duration_minutes: session.service.duration_minutes
+        } : null
+      })) : [],
+      payment_transactions: purchase.payment_transactions ? purchase.payment_transactions.map(transaction => ({
+        transaction_id: transaction.transaction_id,
+        gateway_transaction_id: transaction.gateway_transaction_id,
+        gateway_provider: transaction.gateway_provider,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        status: transaction.status,
+        created_at: transaction.created_at,
+        updated_at: transaction.updated_at
+      })) : []
+    };
+  }
+
   async getPurchasesByUserId(userId: number): Promise<PurchaseResponseDto[]> {
     const purchases = await this.purchaseRepository.find({
       where: { user_id: userId },
       relations: ['package'],
+      order: { purchase_date: 'DESC' }
+    });
+
+    return purchases.map(purchase => this.mapToResponseDto(purchase));
+  }
+
+  async getServicePurchasesByUserId(userId: number): Promise<PurchaseResponseDto[]> {
+    const purchases = await this.purchaseRepository.find({
+      where: { 
+        user_id: userId,
+        purchase_type: 'service'
+      },
+      relations: ['service'],
       order: { purchase_date: 'DESC' }
     });
 
@@ -413,7 +512,10 @@ export class PurchaseService {
         description: purchase.service.description,
         base_price: Number(purchase.service.base_price),
         duration_minutes: purchase.service.duration_minutes,
-        category: purchase.service.category
+        category: purchase.service.category,
+        image_url: purchase.service.image_url,
+        is_active: purchase.service.is_active,
+        metadata: purchase.service.metadata,
       } : undefined
     };
   }

@@ -1,3 +1,4 @@
+import { ServiceCategory } from '@models/service.model';
 import { PaymentStatus } from '../../models/purchase.model';
 import { WompiPaymentMethod } from '../payment/payment.interface';
 
@@ -64,7 +65,10 @@ export interface PurchaseResponseDto {
     description?: string;
     base_price: number;
     duration_minutes: number;
-    category: string;
+    category: ServiceCategory;
+    image_url?: string;
+    is_active: boolean;
+    metadata?: any;
   };
 }
 
