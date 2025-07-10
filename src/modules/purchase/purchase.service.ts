@@ -3,11 +3,19 @@ import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { User } from '../../models/user.model';
 import { Package } from '../../models/package.model';
-import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto, CreateServicePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto, CreateServicePurchaseDto, CreateAdminServicePurchaseDto } from './purchase.dto';
 import { WompiPaymentMethod } from '../payment/payment.interface';
 import { Service } from '../../models/service.model';
 import { UserSession, UserSessionStatus } from '../../models/user-session.model';
 import { PurchaseValidation } from './purchase.validation';
+import { TemporaryCustomer } from '../../models/temporary-customer.model';
+import { 
+  generateCashPaymentTransactionId, 
+  generateServicePurchaseTransactionId, 
+  generatePackagePurchaseTransactionId,
+  generateTransactionIdByType 
+} from '../../utils/transaction-id.util';
+// Removed logger import - using console.log instead
 
 export class PurchaseService {
   private purchaseRepository: Repository<Purchase>;
@@ -49,6 +57,9 @@ export class PurchaseService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + packageData.validity_days);
 
+    // Generate unique transaction ID for package purchase
+    const transactionId = generatePackagePurchaseTransactionId(purchaseData.package_id);
+
     const newPurchase = this.purchaseRepository.create({
       user_id: purchaseData.user_id,
       package_id: purchaseData.package_id,
@@ -56,7 +67,7 @@ export class PurchaseService {
       amount_paid: purchaseData.amount_paid,
       payment_status: purchaseData.payment_status || PaymentStatus.PENDING,
       payment_method: purchaseData.payment_method,
-      transaction_id: purchaseData.transaction_id,
+      transaction_id: transactionId,
       expires_at: expiresAt,
       payment_details: purchaseData.payment_details
     });
@@ -86,8 +97,8 @@ export class PurchaseService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + packageData.validity_days);
 
-    // Generate a unique reference for cash payment
-    const cashReference = `CASH-${Date.now()}-${purchaseData.user_id}`;
+    // Generate a unique reference for cash payment using the new utility
+    const cashReference = generateCashPaymentTransactionId();
 
     // Prepare payment details with customer info and reference
     const paymentDetails = {
@@ -117,7 +128,9 @@ export class PurchaseService {
     const queryBuilder = this.purchaseRepository
       .createQueryBuilder('purchase')
       .leftJoinAndSelect('purchase.user', 'user')
-      .leftJoinAndSelect('purchase.package', 'package');
+      .leftJoinAndSelect('purchase.package', 'package')
+      .leftJoinAndSelect('purchase.service', 'service')
+      .leftJoinAndSelect('purchase.temporaryCustomer', 'temporaryCustomer');
     
     if (userId) {
       queryBuilder.andWhere('purchase.user_id = :userId', { userId });
@@ -136,7 +149,7 @@ export class PurchaseService {
   async getPurchaseById(purchaseId: number): Promise<PurchaseResponseDto | null> {
     const purchase = await this.purchaseRepository.findOne({
       where: { purchase_id: purchaseId },
-      relations: ['user', 'package']
+      relations: ['user', 'package', 'service', 'temporaryCustomer']
     });
 
     if (!purchase) {
@@ -235,7 +248,7 @@ export class PurchaseService {
   async getPurchasesByUserId(userId: number): Promise<PurchaseResponseDto[]> {
     const purchases = await this.purchaseRepository.find({
       where: { user_id: userId },
-      relations: ['package'],
+      relations: ['package', 'service', 'temporaryCustomer', 'user'],
       order: { purchase_date: 'DESC' }
     });
 
@@ -248,7 +261,7 @@ export class PurchaseService {
         user_id: userId,
         purchase_type: 'service'
       },
-      relations: ['service'],
+      relations: ['service', 'temporaryCustomer', 'user'],
       order: { purchase_date: 'DESC' }
     });
 
@@ -258,7 +271,7 @@ export class PurchaseService {
   async updatePurchase(purchaseId: number, updateData: UpdatePurchaseDto): Promise<PurchaseResponseDto | null> {
     const existingPurchase = await this.purchaseRepository.findOne({
       where: { purchase_id: purchaseId },
-      relations: ['user', 'package']
+      relations: ['user', 'package', 'service', 'temporaryCustomer']
     });
 
     if (!existingPurchase) {
@@ -279,7 +292,7 @@ export class PurchaseService {
   async updatePaymentStatus(purchaseId: number, paymentStatus: PaymentStatus): Promise<PurchaseResponseDto | null> {
     const purchase = await this.purchaseRepository.findOne({
       where: { purchase_id: purchaseId },
-      relations: ['user', 'package']
+      relations: ['user', 'package', 'service', 'temporaryCustomer']
     });
 
     if (!purchase) {
@@ -297,7 +310,7 @@ export class PurchaseService {
   async confirmCashPayment(purchaseId: number, adminNotes?: string): Promise<PurchaseResponseDto | null> {
     const purchase = await this.purchaseRepository.findOne({
       where: { purchase_id: purchaseId },
-      relations: ['user', 'package']
+      relations: ['user', 'package', 'service', 'temporaryCustomer']
     });
 
     if (!purchase) {
@@ -405,7 +418,7 @@ export class PurchaseService {
     return purchases.map(purchase => this.mapToResponseDto(purchase));
   }
 
-  async createServicePurchase(purchaseData: CreateServicePurchaseDto, discountPercentage?: number): Promise<PurchaseResponseDto> {
+    async createServicePurchase(purchaseData: CreateServicePurchaseDto, discountPercentage?: number): Promise<PurchaseResponseDto> {
     // Verificar que el usuario existe
     const user = await this.userRepository.findOne({
       where: { id: purchaseData.user_id }
@@ -432,6 +445,9 @@ export class PurchaseService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
+    // Generate unique transaction ID for service purchase
+    const transactionId = generateServicePurchaseTransactionId(purchaseData.service_id);
+
     // Preparar detalles de pago con información de descuento si aplica
     const paymentDetails = {
       ...purchaseData.payment_details,
@@ -447,7 +463,7 @@ export class PurchaseService {
       amount_paid: purchaseData.amount_paid,
       payment_status: purchaseData.payment_status || PaymentStatus.PENDING,
       payment_method: purchaseData.payment_method,
-      transaction_id: purchaseData.transaction_id,
+      transaction_id: transactionId,
       expires_at: expiresAt,
       payment_details: paymentDetails
     });
@@ -462,26 +478,314 @@ export class PurchaseService {
     return this.mapToResponseDto(savedPurchase);
   }
 
+  async createAdminServicePurchase(
+    purchaseData: CreateAdminServicePurchaseDto, 
+    adminUserId: number
+  ): Promise<PurchaseResponseDto> {
+    console.log('🛒 Iniciando creación de compra de servicio para cliente temporal', {
+      adminUserId,
+      serviceId: purchaseData.service_id,
+      amount: purchaseData.amount_paid,
+      paymentMethod: purchaseData.payment_method,
+      paymentStatus: purchaseData.payment_status,
+      sessionsQuantity: purchaseData.sessions_quantity,
+      customerEmail: purchaseData.customer_data.email
+    });
+
+    try {
+      // Buscar o crear cliente temporal
+      console.log('🔍 Verificando si existe cliente temporal', {
+        identificationType: purchaseData.customer_data.identification_type,
+        identificationNumber: purchaseData.customer_data.identification_number
+      });
+
+      const tempCustomerRepository = AppDataSource.getRepository(TemporaryCustomer);
+      
+      let savedTempCustomer = await this.findTemporaryCustomerByIdentification(
+        purchaseData.customer_data.identification_type!,
+        purchaseData.customer_data.identification_number!
+      );
+
+      if (savedTempCustomer) {
+        console.log('✅ Cliente temporal existente encontrado', {
+          tempCustomerId: savedTempCustomer.temp_customer_id,
+          customerName: `${savedTempCustomer.first_name} ${savedTempCustomer.last_name}`,
+          identificationType: savedTempCustomer.identification_type,
+          identificationNumber: savedTempCustomer.identification_number
+        });
+      } else {
+        console.log('📝 Creando nuevo cliente temporal', {
+          customerData: {
+            name: `${purchaseData.customer_data.first_name} ${purchaseData.customer_data.last_name}`,
+            email: purchaseData.customer_data.email,
+            phone: purchaseData.customer_data.phone,
+            identificationType: purchaseData.customer_data.identification_type,
+            identificationNumber: purchaseData.customer_data.identification_number
+          }
+        });
+
+        const tempCustomer = tempCustomerRepository.create({
+          ...purchaseData.customer_data,
+          created_by: adminUserId
+        });
+        savedTempCustomer = await tempCustomerRepository.save(tempCustomer);
+        
+        console.log('✅ Nuevo cliente temporal creado exitosamente', {
+          tempCustomerId: savedTempCustomer.temp_customer_id,
+          customerName: `${savedTempCustomer.first_name} ${savedTempCustomer.last_name}`
+        });
+      }
+  
+      // Verificar que el servicio existe
+      console.log('🔍 Verificando existencia del servicio', {
+        serviceId: purchaseData.service_id
+      });
+  
+      const service = await this.serviceRepository.findOne({
+        where: { service_id: purchaseData.service_id }
+      });
+      if (!service) {
+        console.error('❌ Servicio no encontrado', {
+          serviceId: purchaseData.service_id
+        });
+        throw new Error('Service not found');
+      }
+  
+      console.log('✅ Servicio encontrado', {
+        serviceId: service.service_id,
+        serviceName: service.service_name,
+        basePrice: service.base_price
+      });
+  
+      // Calcular fecha de expiración
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+  
+      console.log('📅 Fecha de expiración calculada', {
+        expiresAt: expiresAt.toISOString()
+      });
+  
+      // Generate unique transaction ID for admin service purchase
+      const transactionId = generateServicePurchaseTransactionId(purchaseData.service_id);
+      
+      // Crear compra
+      console.log('💳 Creando registro de compra', {
+        userId: adminUserId,
+        tempCustomerId: savedTempCustomer.temp_customer_id,
+        serviceId: purchaseData.service_id,
+        amount: purchaseData.amount_paid,
+        paymentStatus: purchaseData.payment_status.toLowerCase(),
+        paymentMethod: purchaseData.payment_method,
+        transactionId: transactionId
+      });
+  
+      const purchase = this.purchaseRepository.create({
+        user_id: adminUserId,
+        temp_customer_id: savedTempCustomer.temp_customer_id,
+        service_id: purchaseData.service_id,
+        purchase_type: 'service',
+        amount_paid: purchaseData.amount_paid,
+        payment_status: purchaseData.payment_status.toLowerCase() as PaymentStatus,
+        payment_method: purchaseData.payment_method,
+        transaction_id: transactionId,
+        expires_at: expiresAt,
+        payment_details: {
+          created_by_admin: adminUserId,
+          admin_notes: purchaseData.admin_notes,
+          original_price: Number(service.base_price),
+          discount_percentage: purchaseData.discount_percentage || 0,
+          final_price: purchaseData.amount_paid
+        }
+      });
+  
+      const savedPurchase = await this.purchaseRepository.save(purchase);
+      
+      console.log('✅ Compra creada exitosamente', {
+        purchaseId: savedPurchase.purchase_id,
+        amount: savedPurchase.amount_paid,
+        paymentStatus: savedPurchase.payment_status
+      });
+  
+      // Crear sesiones si el pago está completado
+      if (savedPurchase.payment_status === PaymentStatus.COMPLETED) {
+        console.log('🎯 Creando sesiones de usuario (pago completado)', {
+          purchaseId: savedPurchase.purchase_id,
+          sessionsQuantity: purchaseData.sessions_quantity || 1
+        });
+        
+        await this.createSessionsForServicePurchase(
+          savedPurchase, 
+          purchaseData.sessions_quantity || 1
+        );
+        
+        console.log('✅ Sesiones creadas exitosamente', {
+          purchaseId: savedPurchase.purchase_id,
+          sessionsCreated: purchaseData.sessions_quantity || 1
+        });
+      } else {
+        console.log('⏳ Sesiones no creadas (pago pendiente)', {
+          purchaseId: savedPurchase.purchase_id,
+          paymentStatus: savedPurchase.payment_status
+        });
+      }
+  
+      // Cargar la compra con todas las relaciones para la respuesta completa
+      console.log('📋 Cargando compra con relaciones completas para respuesta', {
+        purchaseId: savedPurchase.purchase_id
+      });
+      
+      const purchaseWithRelations = await this.purchaseRepository.findOne({
+        where: { purchase_id: savedPurchase.purchase_id },
+        relations: ['user', 'service', 'temporaryCustomer', 'userSessions']
+      });
+      
+      if (!purchaseWithRelations) {
+        throw new Error('Error loading purchase with relations');
+      }
+      
+      const result = this.mapToResponseDto(purchaseWithRelations);
+      
+      console.log('🎉 Compra de servicio para cliente temporal completada exitosamente', {
+        purchaseId: savedPurchase.purchase_id,
+        tempCustomerId: savedTempCustomer.temp_customer_id,
+        serviceId: purchaseData.service_id,
+        totalAmount: purchaseData.amount_paid,
+        sessionsQuantity: purchaseData.sessions_quantity || 1,
+        responseData: {
+          hasTemporaryCustomer: !!result.temporary_customer,
+          hasService: !!result.service,
+          hasSessions: result.sessions?.length || 0
+        }
+      });
+  
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Error en createAdminServicePurchase', {
+        adminUserId,
+        serviceId: purchaseData.service_id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        purchaseData: {
+          amount: purchaseData.amount_paid,
+          paymentMethod: purchaseData.payment_method,
+          paymentStatus: purchaseData.payment_status,
+          customerEmail: purchaseData.customer_data.email
+        }
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Busca un cliente temporal por tipo y número de identificación
+   * @param identificationType Tipo de identificación (CC, CE, TI, PP, NIT)
+   * @param identificationNumber Número de identificación
+   * @returns Cliente temporal encontrado o null si no existe
+   */
+  async findTemporaryCustomerByIdentification(
+    identificationType: string,
+    identificationNumber: string
+  ): Promise<TemporaryCustomer | null> {
+    if (!identificationNumber || !identificationType) {
+      return null;
+    }
+
+    console.log('🔍 Buscando cliente temporal por identificación', {
+      identificationType,
+      identificationNumber
+    });
+
+    try {
+      const tempCustomerRepository = AppDataSource.getRepository(TemporaryCustomer);
+      
+      const tempCustomer = await tempCustomerRepository.findOne({
+        where: {
+          identification_type: identificationType as any,
+          identification_number: identificationNumber
+        }
+      });
+      console.log("🚀 ~ PurchaseService ~ tempCustomer:", tempCustomer)
+
+      if (tempCustomer) {
+        console.log('✅ Cliente temporal encontrado', {
+          tempCustomerId: tempCustomer.temp_customer_id,
+          customerName: `${tempCustomer.first_name} ${tempCustomer.last_name}`,
+          createdAt: tempCustomer.created_at
+        });
+      } else {
+        console.log('❌ Cliente temporal no encontrado', {
+          identificationType,
+          identificationNumber
+        });
+      }
+
+      return tempCustomer;
+    } catch (error) {
+      console.error('❌ Error buscando cliente temporal', {
+        identificationType,
+        identificationNumber,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return null;
+    }
+  }
+
   private async createSessionsForServicePurchase(purchase: Purchase, sessionsQuantity: number): Promise<void> {
+    console.log('🔄 Iniciando creación de sesiones', {
+      purchaseId: purchase.purchase_id,
+      serviceId: purchase.service_id,
+      sessionsQuantity
+    });
+  
     const userSessionRepository = AppDataSource.getRepository(UserSession);
     
     for (let i = 0; i < sessionsQuantity; i++) {
+      console.log(`📝 Creando sesión ${i + 1}/${sessionsQuantity}`, {
+        purchaseId: purchase.purchase_id,
+        serviceId: purchase.service_id,
+        sessionNumber: i + 1
+      });
+  
       const userSession = userSessionRepository.create({
         service_id: purchase.service_id,
         purchase_id: purchase.purchase_id,
+        sessions_remaining: 1, 
         status: UserSessionStatus.ACTIVE,
         expires_at: purchase.expires_at
       });
       
       await userSessionRepository.save(userSession);
     }
+  
+    console.log('✅ Todas las sesiones creadas exitosamente', {
+      purchaseId: purchase.purchase_id,
+      totalSessionsCreated: sessionsQuantity
+    });
   }
 
   // Actualizar método existente para manejar ambos tipos
   private mapToResponseDto(purchase: Purchase): PurchaseResponseDto {
+    // Si existe cliente temporal, usar sus datos en lugar del usuario
+    const customerData = purchase.temporaryCustomer ? {
+      user_id: purchase.temporaryCustomer.temp_customer_id,
+      email: purchase.temporaryCustomer.email || '',
+      first_name: purchase.temporaryCustomer.first_name,
+      last_name: purchase.temporaryCustomer.last_name,
+      phone: purchase.temporaryCustomer.phone,
+      identification_type: purchase.temporaryCustomer.identification_type,
+      identification_number: purchase.temporaryCustomer.identification_number
+    } : purchase.user ? {
+      user_id: purchase.user.id,
+      email: purchase.user.email,
+      first_name: purchase.user.first_name,
+      last_name: purchase.user.last_name
+    } : undefined;
+
     return {
       purchase_id: purchase.purchase_id,
       user_id: purchase.user_id,
+      temp_customer_id: purchase.temp_customer_id,
       package_id: purchase.package_id,
       service_id: purchase.service_id,
       purchase_type: purchase.purchase_type,
@@ -492,11 +796,17 @@ export class PurchaseService {
       purchase_date: purchase.purchase_date,
       expires_at: purchase.expires_at,
       payment_details: purchase.payment_details,
-      user: purchase.user ? {
-        user_id: purchase.user.id,
-        email: purchase.user.email,
-        first_name: purchase.user.first_name,
-        last_name: purchase.user.last_name
+      user: customerData,
+      temporary_customer: purchase.temporaryCustomer ? {
+        temp_customer_id: purchase.temporaryCustomer.temp_customer_id,
+        first_name: purchase.temporaryCustomer.first_name,
+        last_name: purchase.temporaryCustomer.last_name,
+        email: purchase.temporaryCustomer.email,
+        phone: purchase.temporaryCustomer.phone,
+        identification_type: purchase.temporaryCustomer.identification_type,
+        identification_number: purchase.temporaryCustomer.identification_number,
+        notes: purchase.temporaryCustomer.notes,
+        created_at: purchase.temporaryCustomer.created_at
       } : undefined,
       package: purchase.package ? {
         package_id: purchase.package.package_id,
@@ -516,7 +826,16 @@ export class PurchaseService {
         image_url: purchase.service.image_url,
         is_active: purchase.service.is_active,
         metadata: purchase.service.metadata,
-      } : undefined
+      } : undefined,
+      sessions: purchase.userSessions ? purchase.userSessions.map(session => ({
+        session_id: session.user_session_id,
+        purchase_id: session.purchase_id,
+        service_id: session.service_id,
+        status: session.status,
+        sessions_remaining: session.sessions_remaining,
+        created_at: session.created_at,
+        expires_at: session.expires_at
+      })) : []
     };
   }
 }

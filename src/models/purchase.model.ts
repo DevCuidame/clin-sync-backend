@@ -4,6 +4,7 @@ import { Package } from './package.model';
 import { PaymentTransaction } from './payment-transaction.model';
 import { UserSession } from './user-session.model';
 import { Service } from './service.model';
+import { TemporaryCustomer } from './temporary-customer.model';
 
 export enum PaymentStatus {
   PENDING = 'pending',
@@ -84,4 +85,11 @@ export class Purchase {
   @ManyToOne(() => Service, { nullable: true })
   @JoinColumn({ name: 'service_id' })
   service?: Service;
+  
+  @Column({ nullable: true })
+  temp_customer_id?: number;
+  
+  @ManyToOne(() => TemporaryCustomer, { nullable: true })
+  @JoinColumn({ name: 'temp_customer_id' })
+  temporaryCustomer?: TemporaryCustomer;
 }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PurchaseController } from './purchase.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
+import { restrictTo } from '../../middlewares/role.middleware';
 
 const router = Router();
 const purchaseController = new PurchaseController();
@@ -42,5 +43,11 @@ router.get('/cash/pending', purchaseController.getPendingCashPayments);
 
 // Agregar nueva ruta para compra de servicios
 router.post('/service', purchaseController.createServicePurchase);
+
+// Ruta para administradores - crear compra para cliente temporal
+router.post('/admin/service', restrictTo(['admin']), purchaseController.createAdminServicePurchase);
+
+// Ruta para buscar cliente temporal por identificación
+router.get('/temp-customer/search', restrictTo(['admin']), purchaseController.findTemporaryCustomer);
 
 export default router;

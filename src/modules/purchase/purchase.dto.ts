@@ -1,6 +1,7 @@
 import { ServiceCategory } from '@models/service.model';
 import { PaymentStatus } from '../../models/purchase.model';
 import { WompiPaymentMethod } from '../payment/payment.interface';
+import { IdentificationType } from '@models/temporary-customer.model';
 
 export interface CreatePurchaseDto {
   user_id: number;
@@ -35,6 +36,7 @@ export interface CreateServicePurchaseDto {
 export interface PurchaseResponseDto {
   purchase_id: number;
   user_id: number;
+  temp_customer_id?: number;
   package_id?: number;
   service_id?: number;
   purchase_type: 'package' | 'service';
@@ -50,6 +52,17 @@ export interface PurchaseResponseDto {
     email: string;
     first_name?: string;
     last_name?: string;
+  };
+  temporary_customer?: {
+    temp_customer_id: number;
+    first_name: string;
+    last_name: string;
+    email?: string;
+    phone?: string;
+    identification_type?: IdentificationType;
+    identification_number?: string;
+    notes?: string;
+    created_at: Date;
   };
   package?: {
     package_id: number;
@@ -70,6 +83,15 @@ export interface PurchaseResponseDto {
     is_active: boolean;
     metadata?: any;
   };
+  sessions?: {
+    session_id: number;
+    purchase_id: number;
+    service_id: number;
+    status: string;
+    sessions_remaining: number;
+    created_at: Date;
+    expires_at: Date;
+  }[];
 }
 
 export interface CreateCashPurchaseDto {
@@ -85,4 +107,26 @@ export interface CreateCashPurchaseDto {
     notes?: string;
     reference?: string;
   };
+}
+
+export interface CreateAdminServicePurchaseDto {
+  // Datos del cliente temporal
+  customer_data: {
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    email?: string;
+    identification_number?: string;
+    identification_type?: IdentificationType;
+    notes?: string;
+  };
+  
+  // Datos de la compra
+  service_id: number;
+  amount_paid: number;
+  payment_method: string; // 'CASH', 'CARD', 'TRANSFER'
+  payment_status: PaymentStatus;
+  sessions_quantity?: number;
+  discount_percentage?: number;
+  admin_notes?: string;
 }

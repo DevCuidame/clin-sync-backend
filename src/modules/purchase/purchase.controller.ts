@@ -1,9 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { PurchaseService } from './purchase.service';
 import { PurchaseSessionService } from './purchase-session.service';
-import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto, CreateServicePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto, CreateServicePurchaseDto, CreateAdminServicePurchaseDto } from './purchase.dto';
 import { validateCashPurchase, sanitizeCashPurchaseData } from './validation/cash-purchase.validation';
 import { WompiCurrency } from '../payment/payment.interface';
+import { BadRequestError } from '../../utils/error-handler';
 
 export class PurchaseController {
   private purchaseService: PurchaseService;
@@ -141,6 +142,58 @@ export class PurchaseController {
     }
   };
 
+  /**
+   * Busca un cliente temporal por tipo y número de identificación
+   */
+  findTemporaryCustomer = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { identification_type, identification_number } = req.query;
+
+      if (!identification_type || !identification_number) {
+        res.status(400).json({
+          success: false,
+          message: 'Se requieren identification_type e identification_number como parámetros de consulta'
+        });
+        return;
+      }
+
+      const tempCustomer = await this.purchaseService.findTemporaryCustomerByIdentification(
+        identification_type as string,
+        identification_number as string
+      );
+
+      if (!tempCustomer) {
+        res.status(404).json({
+          success: false,
+          message: 'Cliente temporal no encontrado',
+          data: null
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Cliente temporal encontrado',
+        data: {
+          temp_customer_id: tempCustomer.temp_customer_id,
+          first_name: tempCustomer.first_name,
+          last_name: tempCustomer.last_name,
+          phone: tempCustomer.phone,
+          email: tempCustomer.email,
+          identification_type: tempCustomer.identification_type,
+          identification_number: tempCustomer.identification_number,
+          created_at: tempCustomer.created_at
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error buscando cliente temporal',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
   getUserServicePurchases = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
@@ -179,6 +232,8 @@ export class PurchaseController {
       });
     }
   };
+
+
 
   updatePurchase = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -534,7 +589,31 @@ export class PurchaseController {
     }
   };
 
-  createServicePurchase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  createAdminServicePurchase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const purchaseData: CreateAdminServicePurchaseDto = req.body;
+      const adminUserId = (req as any).user?.id;
+  
+      if (!adminUserId) {
+        throw new BadRequestError('Usuario administrador no autenticado');
+      }
+  
+      const purchase = await this.purchaseService.createAdminServicePurchase(
+        purchaseData,
+        adminUserId
+      );
+      
+      res.status(201).json({
+        success: true,
+        message: 'Compra de servicio para cliente temporal creada exitosamente',
+        data: purchase
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+   createServicePurchase = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const purchaseData: CreateServicePurchaseDto = req.body;
       const purchase = await this.purchaseService.createServicePurchase(purchaseData);
