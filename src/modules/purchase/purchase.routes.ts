@@ -43,6 +43,7 @@ router.get('/cash/pending', purchaseController.getPendingCashPayments);
 
 // Agregar nueva ruta para compra de servicios
 router.post('/service', purchaseController.createServicePurchase);
+router.post('/services/cash', purchaseController.createServiceCashPurchase);
 
 // Ruta para administradores - crear compra para cliente temporal
 router.post('/admin/service', restrictTo(['admin']), purchaseController.createAdminServicePurchase);

@@ -227,12 +227,14 @@ export class PackageService {
     const userSessionRepository = AppDataSource.getRepository(UserSession);
     
     // Consulta optimizada con joins para evitar problema N+1
+    // Solo obtener compras que tengan paquetes (no servicios individuales)
     const userPurchases = await purchaseRepository
       .createQueryBuilder('purchase')
-      .leftJoinAndSelect('purchase.package', 'package')
+      .innerJoinAndSelect('purchase.package', 'package')
       .leftJoinAndSelect('purchase.userSessions', 'userSession')
       .where('purchase.user_id = :userId', { userId })
       .andWhere('purchase.payment_status = :status', { status: 'completed' })
+      .andWhere('purchase.package_id IS NOT NULL')
       .orderBy('purchase.purchase_date', 'DESC')
       .getMany();
 

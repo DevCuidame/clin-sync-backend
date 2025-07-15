@@ -3,7 +3,7 @@ import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { User } from '../../models/user.model';
 import { Package } from '../../models/package.model';
-import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto, CreateServicePurchaseDto, CreateAdminServicePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, PurchaseResponseDto, CreateCashPurchaseDto, CreateServicePurchaseDto, CreateAdminServicePurchaseDto, CreateServiceCashPurchaseDto, PurchaseFiltersDto, PaginatedPurchasesResponseDto } from './purchase.dto';
 import { WompiPaymentMethod } from '../payment/payment.interface';
 import { Service } from '../../models/service.model';
 import { UserSession, UserSessionStatus } from '../../models/user-session.model';
@@ -144,6 +144,81 @@ export class PurchaseService {
     
     const purchases = await queryBuilder.getMany();
     return purchases.map(purchase => this.mapToResponseDto(purchase));
+  }
+
+  async getPaginatedPurchases(filters: PurchaseFiltersDto): Promise<PaginatedPurchasesResponseDto> {
+    const {
+      page = 1,
+      limit = 10,
+      sort = 'purchase_date',
+      order = 'DESC',
+      user_id,
+      payment_status,
+      purchase_type,
+      payment_method,
+      start_date,
+      end_date
+    } = filters;
+
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.purchaseRepository
+      .createQueryBuilder('purchase')
+      .leftJoinAndSelect('purchase.user', 'user')
+      .leftJoinAndSelect('purchase.package', 'package')
+      .leftJoinAndSelect('purchase.service', 'service')
+      .leftJoinAndSelect('purchase.temporaryCustomer', 'temporaryCustomer');
+
+    // Aplicar filtros
+    if (user_id) {
+      queryBuilder.andWhere('purchase.user_id = :userId', { userId: user_id });
+    }
+
+    if (payment_status) {
+      queryBuilder.andWhere('purchase.payment_status = :paymentStatus', { paymentStatus: payment_status });
+    }
+
+    if (purchase_type) {
+      queryBuilder.andWhere('purchase.purchase_type = :purchaseType', { purchaseType: purchase_type });
+    }
+
+    if (payment_method) {
+      queryBuilder.andWhere('purchase.payment_method = :paymentMethod', { paymentMethod: payment_method });
+    }
+
+    if (start_date) {
+      queryBuilder.andWhere('purchase.purchase_date >= :startDate', { startDate: start_date });
+    }
+
+    if (end_date) {
+      queryBuilder.andWhere('purchase.purchase_date <= :endDate', { endDate: end_date });
+    }
+
+    // Aplicar ordenamiento
+    const validSortFields = ['purchase_date', 'amount_paid', 'payment_status', 'purchase_id'];
+    const sortField = validSortFields.includes(sort) ? sort : 'purchase_date';
+    queryBuilder.orderBy(`purchase.${sortField}`, order);
+
+    // Aplicar paginación
+    queryBuilder.skip(skip).take(limit);
+
+    // Obtener resultados y total
+    const [purchases, totalItems] = await queryBuilder.getManyAndCount();
+
+    const items = purchases.map(purchase => this.mapToResponseDto(purchase));
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      items,
+      metadata: {
+        totalItems,
+        itemCount: items.length,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page
+      },
+      filters
+    };
   }
 
   async getPurchaseById(purchaseId: number): Promise<PurchaseResponseDto | null> {
@@ -478,6 +553,57 @@ export class PurchaseService {
     return this.mapToResponseDto(savedPurchase);
   }
 
+  async createServiceCashPurchase(purchaseData: CreateServiceCashPurchaseDto): Promise<PurchaseResponseDto> {
+    // Verificar que el usuario existe
+    const user = await this.userRepository.findOne({
+      where: { id: purchaseData.user_id }
+    });
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verificar que el servicio existe
+    const service = await this.serviceRepository.findOne({
+      where: { service_id: purchaseData.service_id }
+    });
+    if (!service) {
+      throw new Error('Service not found');
+    }
+
+    // Calcular fecha de expiración (30 días por defecto)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    // Generar referencia única para pago en efectivo
+    const cashReference = generateCashPaymentTransactionId();
+
+    // Preparar detalles de pago con información del cliente y referencia
+    const paymentDetails = {
+      customer_info: purchaseData.customer_info,
+      payment_reference: cashReference,
+      payment_type: 'cash',
+      service_type: 'service_purchase',
+      sessions_quantity: purchaseData.sessions_quantity || 1,
+      created_at: new Date().toISOString(),
+      ...purchaseData.payment_details
+    };
+
+    const newPurchase = this.purchaseRepository.create({
+      user_id: purchaseData.user_id,
+      service_id: purchaseData.service_id,
+      purchase_type: 'service',
+      amount_paid: purchaseData.amount_paid,
+      payment_status: PaymentStatus.PENDING, // Siempre pendiente para pagos en efectivo
+      payment_method: WompiPaymentMethod.CASH,
+      transaction_id: cashReference,
+      expires_at: expiresAt,
+      payment_details: paymentDetails
+    });
+
+    const savedPurchase = await this.purchaseRepository.save(newPurchase);
+    return this.mapToResponseDto(savedPurchase);
+  }
+
   async createAdminServicePurchase(
     purchaseData: CreateAdminServicePurchaseDto, 
     adminUserId: number
@@ -691,10 +817,6 @@ export class PurchaseService {
       return null;
     }
 
-    console.log('🔍 Buscando cliente temporal por identificación', {
-      identificationType,
-      identificationNumber
-    });
 
     try {
       const tempCustomerRepository = AppDataSource.getRepository(TemporaryCustomer);
@@ -705,28 +827,9 @@ export class PurchaseService {
           identification_number: identificationNumber
         }
       });
-      console.log("🚀 ~ PurchaseService ~ tempCustomer:", tempCustomer)
-
-      if (tempCustomer) {
-        console.log('✅ Cliente temporal encontrado', {
-          tempCustomerId: tempCustomer.temp_customer_id,
-          customerName: `${tempCustomer.first_name} ${tempCustomer.last_name}`,
-          createdAt: tempCustomer.created_at
-        });
-      } else {
-        console.log('❌ Cliente temporal no encontrado', {
-          identificationType,
-          identificationNumber
-        });
-      }
 
       return tempCustomer;
     } catch (error) {
-      console.error('❌ Error buscando cliente temporal', {
-        identificationType,
-        identificationNumber,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
       return null;
     }
   }

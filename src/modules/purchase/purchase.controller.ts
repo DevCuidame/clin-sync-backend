@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 import { PurchaseService } from './purchase.service';
 import { PurchaseSessionService } from './purchase-session.service';
-import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto, CreateServicePurchaseDto, CreateAdminServicePurchaseDto } from './purchase.dto';
+import { CreatePurchaseDto, UpdatePurchaseDto, CreateCashPurchaseDto, CreateServicePurchaseDto, CreateAdminServicePurchaseDto, CreateServiceCashPurchaseDto } from './purchase.dto';
+import { PaymentStatus } from '../../models/purchase.model';
 import { validateCashPurchase, sanitizeCashPurchaseData } from './validation/cash-purchase.validation';
 import { WompiCurrency } from '../payment/payment.interface';
 import { BadRequestError } from '../../utils/error-handler';
@@ -81,15 +82,52 @@ export class PurchaseController {
 
   getPurchases = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { user_id, payment_status } = req.query;
-      const purchases = await this.purchaseService.getAllPurchases(
-        user_id ? parseInt(user_id as string) : undefined,
-        payment_status as string
-      );
-      res.status(200).json({
-        success: true,
-        data: purchases
-      });
+      const { 
+        page, 
+        limit, 
+        sort, 
+        order, 
+        user_id, 
+        payment_status, 
+        purchase_type, 
+        payment_method, 
+        start_date, 
+        end_date 
+      } = req.query;
+
+      // Si se proporcionan parámetros de paginación, usar el método paginado
+      if (page || limit) {
+        const filters = {
+           page: page ? parseInt(page as string) : 1,
+           limit: limit ? parseInt(limit as string) : 10,
+           sort: sort as string,
+           order: (order as 'ASC' | 'DESC') || 'DESC',
+           user_id: user_id ? parseInt(user_id as string) : undefined,
+           payment_status: payment_status as PaymentStatus,
+           purchase_type: purchase_type as 'package' | 'service',
+           payment_method: payment_method as string,
+           start_date: start_date as string,
+           end_date: end_date as string
+         };
+
+        const result = await this.purchaseService.getPaginatedPurchases(filters);
+        res.status(200).json({
+          success: true,
+          data: result.items,
+          metadata: result.metadata,
+          filters: result.filters
+        });
+      } else {
+        // Mantener compatibilidad con la implementación anterior
+        const purchases = await this.purchaseService.getAllPurchases(
+          user_id ? parseInt(user_id as string) : undefined,
+          payment_status as string
+        );
+        res.status(200).json({
+          success: true,
+          data: purchases
+        });
+      }
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -625,6 +663,47 @@ export class PurchaseController {
       });
     } catch (error) {
       next(error);
+    }
+  };
+
+  createServiceCashPurchase = async (req: Request, res: Response): Promise<void> => {
+    try {
+      let purchaseData: CreateServiceCashPurchaseDto = req.body;
+      const userId = (req as any).user?.id;
+      const currency = (req.body.currency as WompiCurrency) || WompiCurrency.COP;
+
+      console.log('💰 Procesando compra de servicio en efectivo:', {
+        service_id: purchaseData.service_id,
+        customer_info: purchaseData.customer_info,
+        amount_in_cents: purchaseData.amount_paid,
+        currency: currency,
+        payment_method: 'CASH',
+        sessions_quantity: purchaseData.sessions_quantity || 1
+      });
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'Usuario no autenticado'
+        });
+        return;
+      }
+
+      // Override user_id with authenticated user
+      purchaseData.user_id = userId;
+
+      const newPurchase = await this.purchaseService.createServiceCashPurchase(purchaseData);
+      res.status(201).json({
+        success: true,
+        message: 'Compra de servicio en efectivo creada exitosamente. Estado: Pendiente de confirmación por administrador.',
+        data: newPurchase
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error creando compra de servicio en efectivo',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   };
 

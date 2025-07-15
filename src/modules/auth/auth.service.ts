@@ -8,7 +8,7 @@ import {
   RefreshTokenPayload,
   IRefreshTokenData,
   IAccountDeletionInfo,
-  IDeleteAccountData
+  IDeleteAccountData,
 } from '../auth/auth.interface';
 import {
   BadRequestError,
@@ -26,11 +26,11 @@ import { FileUploadService } from '../../utils/file-upload.util';
 import { AppDataSource } from '../../core/config/database';
 import { RoleRepository } from '../role/role.repository';
 import { UserRole } from '../../models/user-role.model';
+import { Township } from '../../models/location.model';
 import { EmailService } from '../notification/services/email.service';
 import { formatBirthDate } from '../../utils/date-format';
 import { NotificationTemplateService } from '../notification/services/notification-template.service';
 import { TemplateFileService } from '../notification/services/template-file.service';
-
 
 export class AuthService {
   private userRepository: UserRepository;
@@ -53,164 +53,174 @@ export class AuthService {
    * @returns Respuesta de autenticación con token y datos de usuario
    */
 
-async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
-  const { email, password } = credentials;
+  async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
+    const { email, password } = credentials;
 
-  const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.toLowerCase();
 
-  // Buscar usuario por email incluyendo el campo password
-  const user = await this.userRepository.findByEmail(normalizedEmail, false);
-  if (!user) {
-    throw new UnauthorizedError('Credenciales inválidas');
-  }
+    // Buscar usuario por email incluyendo el campo password
+    const user = await this.userRepository.findByEmail(normalizedEmail, false);
+    if (!user) {
+      throw new UnauthorizedError('Credenciales inválidas');
+    }
 
-  // Verificar contraseña
-  if (!user.password_hash) {
-    throw new UnauthorizedError(
-      'Este usuario no tiene contraseña configurada'
+    // Verificar contraseña
+    if (!user.password_hash) {
+      throw new UnauthorizedError(
+        'Este usuario no tiene contraseña configurada'
+      );
+    }
+
+    // Verificar contraseña (compatible con MD5 y PBKDF2)
+    const isPasswordValid = PasswordService.verifyPassword(
+      password,
+      user.password_hash
     );
-  }
+    if (!isPasswordValid) {
+      throw new UnauthorizedError('Credenciales inválidas');
+    }
 
-  // Verificar contraseña (compatible con MD5 y PBKDF2)
-  const isPasswordValid = PasswordService.verifyPassword(
-    password,
-    user.password_hash
-  );
-  if (!isPasswordValid) {
-    throw new UnauthorizedError('Credenciales inválidas');
-  }
+    // Verificar que el correo electrónico esté verificado
+    if (!user.verified) {
+      throw new UnauthorizedError(
+        'Debe verificar su correo electrónico antes de iniciar sesión'
+      );
+    }
 
-  // Verificar que el correo electrónico esté verificado
-  if (!user.verified) {
-    throw new UnauthorizedError('Debe verificar su correo electrónico antes de iniciar sesión');
-  }
+    // Verificar que el usuario esté activo
+    if (user.status !== 'active') {
+      const statusMessages = {
+        inactive: 'Su cuenta ha sido desactivada. Contacte al administrador.',
+        suspended: 'Su cuenta ha sido suspendida. Contacte al administrador.',
+        pending:
+          'Su cuenta está pendiente de activación. Contacte al administrador.',
+      };
+      const message =
+        statusMessages[user.status as keyof typeof statusMessages] ||
+        'Su cuenta no está disponible para iniciar sesión.';
+      throw new UnauthorizedError(message);
+    }
 
-  // Verificar que el usuario esté activo
-  if (user.status !== 'active') {
-    const statusMessages = {
-      'inactive': 'Su cuenta ha sido desactivada. Contacte al administrador.',
-      'suspended': 'Su cuenta ha sido suspendida. Contacte al administrador.',
-      'pending': 'Su cuenta está pendiente de activación. Contacte al administrador.'
+    const message = 'Sesión iniciada exitosamente';
+
+    // Generar token JWT
+    const token = await this.generateToken(user);
+
+    // Generar refresh token
+    const refreshToken = this.generateRefreshToken(user);
+
+    // Actualizar token de sesión en la base de datos
+    await this.userRepository.updateSessionToken(user.id, token);
+
+    // Obtener el rol del usuario para incluirlo en la respuesta
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
+    const userRole = await userRoleRepository.findOne({
+      where: { user_id: user.id },
+      relations: ['role'],
+    });
+    const roleName = userRole?.role?.role_name || 'usuario';
+
+    // Crear objeto de respuesta (exclude imagebs64 from user data as well)
+    const userData = {
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        verified: user.verified,
+        phone: user.phone,
+        identification_type: user.identification_type,
+        identification_number: user.identification_number,
+        address: user.address,
+        gender: user.gender,
+        birth_date: formatBirthDate(user.birth_date),
+        city_id: user.city_id,
+        department: null as number | null,
+        pubname: user.pubname,
+        privname: user.privname,
+        imagebs64: user.imagebs64,
+        path: user.path,
+        role: roleName,
+      },
+      access_token: token,
+      refresh_token: refreshToken,
     };
-    const message = statusMessages[user.status as keyof typeof statusMessages] || 'Su cuenta no está disponible para iniciar sesión.';
-    throw new UnauthorizedError(message);
+
+    const locationRepository = AppDataSource.getRepository(Township);
+    const cityData = await locationRepository.findOne({
+      where: { id: user.city_id },
+      relations: ['department'],
+    });
+
+    if (cityData!.department) {
+      userData.user.department = cityData!.department.id;
+    }
+
+    return {
+      success: true,
+      message,
+      data: userData,
+      token,
+      refresh_token: refreshToken,
+    };
   }
-
-  const message = 'Sesión iniciada exitosamente';
-
-  // Generar token JWT
-  const token = await this.generateToken(user);
-  
-  // Generar refresh token
-  const refreshToken = this.generateRefreshToken(user);
-
-  // Actualizar token de sesión en la base de datos
-  await this.userRepository.updateSessionToken(user.id, token);
-
-  // Obtener el rol del usuario para incluirlo en la respuesta
-  const userRoleRepository = AppDataSource.getRepository(UserRole);
-  const userRole = await userRoleRepository.findOne({
-    where: { user_id: user.id },
-    relations: ['role']
-  });
-  const roleName = userRole?.role?.role_name || 'usuario';
-
-  // Crear objeto de respuesta (exclude imagebs64 from user data as well)
-  const userData = {
-    user: {
-      id: user.id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      verified: user.verified,
-      phone: user.phone,
-      identification_type: user.identification_type,
-      identification_number: user.identification_number,
-      address: user.address,
-      gender: user.gender, 
-      birth_date: formatBirthDate(user.birth_date), 
-      city_id: user.city_id,
-      department: null,
-      pubname: user.pubname,
-      privname: user.privname,
-      imagebs64: user.imagebs64,
-      path: user.path,
-      role: roleName, 
-    },
-    access_token: token,
-    refresh_token: refreshToken,
-  };
-
-  const locationRepository = AppDataSource.getRepository('townships');
-  const cityData = await locationRepository.findOne({
-    where: { id: user.city_id },
-    relations: ['department']
-  });
-
-  if (cityData?.department) {
-    userData.user.department = cityData.department.id;
-  }
-
-  return {
-    success: true,
-    message,
-    data: userData,
-    token,
-    refresh_token: refreshToken
-  };
-}
 
   /**
    * Refrescar token de acceso usando un refresh token
    * @param refreshTokenData Datos del refresh token
    * @returns Nuevo token de acceso
    */
-  async refreshToken(refreshTokenData: IRefreshTokenData): Promise<IAuthResponse> {
+  async refreshToken(
+    refreshTokenData: IRefreshTokenData
+  ): Promise<IAuthResponse> {
     const { refresh_token } = refreshTokenData;
-    
+
     try {
       // Verificar refresh token
-      const decoded = jwt.verify(refresh_token, config.jwt.secret) as RefreshTokenPayload;
-      
+      const decoded = jwt.verify(
+        refresh_token,
+        config.jwt.secret
+      ) as RefreshTokenPayload;
+
       // Validar que sea un refresh token
       if (decoded.type !== 'refresh') {
         throw new UnauthorizedError('Token inválido');
       }
-      
+
       // Buscar usuario
       const user = await this.userRepository.findById(decoded.id);
-      
+
       if (!user) {
         throw new UnauthorizedError('Usuario no encontrado');
       }
-      
+
       // Generar nuevo token de acceso
       const newAccessToken = await this.generateToken(user);
-      
+
       // Generar nuevo refresh token (opcional, para implementar rotación de tokens)
       const newRefreshToken = this.generateRefreshToken(user);
-      
+
       // Actualizar token de sesión en la base de datos (opcional)
       await this.userRepository.updateSessionToken(user.id, newAccessToken);
-      
+
       // Obtener el rol del usuario para incluirlo en la respuesta
       const userRoleRepository = AppDataSource.getRepository(UserRole);
       const userRole = await userRoleRepository.findOne({
         where: { user_id: user.id },
-        relations: ['role']
+        relations: ['role'],
       });
       const roleName = userRole?.role?.role_name || 'User';
-      
+
       return {
         success: true,
         message: 'Token renovado exitosamente',
         data: {
           access_token: newAccessToken,
           refresh_token: newRefreshToken,
-          role: roleName // Incluir el rol del usuario en la respuesta
+          role: roleName, // Incluir el rol del usuario en la respuesta
         },
         token: newAccessToken,
-        refresh_token: newRefreshToken
+        refresh_token: newRefreshToken,
       };
     } catch (error) {
       if (error instanceof jwt.JsonWebTokenError) {
@@ -245,34 +255,38 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
    * @returns Respuesta de autenticación
    */
   async register(userData: IRegisterData): Promise<IAuthResponse> {
-
     const normalizedUserData = {
       ...userData,
-      email: userData.email.toLowerCase()
+      email: userData.email.toLowerCase(),
     };
 
     const { email, password } = normalizedUserData;
-  
+
     // Verificar si el email ya está registrado
     const existingUser = await this.userRepository.findByEmail(email);
     if (existingUser) {
       throw new BadRequestError('No logramos registrar tu correo electrónico.');
     }
-    
+
     // Verificar si el numero de identificación ya está registrado
-    const existingUserIdentification = await this.userRepository.findByIdentification(normalizedUserData.identification_number);
+    const existingUserIdentification =
+      await this.userRepository.findByIdentification(
+        normalizedUserData.identification_number
+      );
     if (existingUserIdentification) {
-      throw new BadRequestError('No logramos registrar tu número de documento.');
+      throw new BadRequestError(
+        'No logramos registrar tu número de documento.'
+      );
     }
-  
+
     // Generar hash de la contraseña
     const hashedPassword = PasswordService.hashPassword(password);
-  
+
     const imageBase64 = normalizedUserData.imagebs64;
-    
+
     const userDataToSave = { ...normalizedUserData };
     delete userDataToSave.imagebs64;
-  
+
     const newUser = await this.userRepository.create({
       ...userDataToSave,
       password_hash: hashedPassword,
@@ -280,39 +294,41 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
       created_at: new Date(),
       updated_at: new Date(),
     });
-    
+
     // Asignar rol por defecto al usuario
     try {
       // Obtener el rol por defecto (normalmente 'User')
       const defaultRole = await this.roleRepository.getDefaultRole();
-      
+
       if (defaultRole) {
         // Verificar si el usuario ya tiene este rol
         const userRoleRepository = AppDataSource.getRepository(UserRole);
         const existingUserRole = await userRoleRepository.findOne({
           where: {
             user_id: newUser.id,
-            role_id: defaultRole.role_id
-          }
+            role_id: defaultRole.role_id,
+          },
         });
-        
+
         if (!existingUserRole) {
           // Crear la relación usuario-rol solo si no existe
           const userRole = userRoleRepository.create({
             user_id: newUser.id,
-            role_id: defaultRole.role_id
+            role_id: defaultRole.role_id,
           });
-          
+
           await userRoleRepository.save(userRole);
         }
       } else {
-        logger.warn(`No se pudo asignar rol por defecto al usuario ${newUser.id} porque no existe el rol 'usuario'`);
+        logger.warn(
+          `No se pudo asignar rol por defecto al usuario ${newUser.id} porque no existe el rol 'usuario'`
+        );
       }
     } catch (error) {
       logger.error(`Error al asignar rol al usuario ${newUser.id}:`, error);
       // No fallamos el proceso completo si hay error en la asignación de rol
     }
-  
+
     // Si hay imagen, guardarla y actualizar la URL de la foto
     let photoUrl = '';
     if (imageBase64) {
@@ -323,7 +339,7 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
           'users',
           'profile'
         );
-  
+
         if (photoUrl) {
           // Actualizar la URL en la base de datos
           await this.userRepository.update(
@@ -334,7 +350,7 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
             },
             'User'
           );
-  
+
           // Actualizar el objeto del paciente antes de devolverlo
           newUser.path = photoUrl;
         }
@@ -343,12 +359,13 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
         // No fallamos el proceso completo si hay error en la imagen
       }
     }
-  
+
     // TODO: Enviar email de verificación (implementar en un servicio de email)
-  
+
     return {
       success: true,
-      message: 'Usuario registrado exitosamente. Por favor, verifica tu correo electrónico.',
+      message:
+        'Usuario registrado exitosamente. Por favor, verifica tu correo electrónico.',
       data: {
         id: newUser.id,
         email: newUser.email,
@@ -387,42 +404,47 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
 
     // Construir la URL de restablecimiento
     const resetUrl = `https://${config.server.production_url}/reset-password?token=${resetToken}`;
-    
+
     // Enviar email con instrucciones
     try {
       // Intentar usar la plantilla desde archivo
       let emailHtml = '';
       let emailSubject = 'Restablecimiento de contraseña';
-      
+
       try {
         // Intentar obtener la plantilla desde archivo
         emailHtml = await this.templateFileService.renderTemplate(
-          'password_reset', 
+          'password_reset',
           {
             userName: user.first_name,
             resetUrl: resetUrl,
-            expirationTime: '1 hora'
+            expirationTime: '1 hora',
           }
         );
       } catch (templateError) {
         // Si no se puede leer la plantilla desde archivo, intentar usar la plantilla de la base de datos
-        logger.warn('No se pudo leer la plantilla desde archivo, intentando usar plantilla de la base de datos');
-        
+        logger.warn(
+          'No se pudo leer la plantilla desde archivo, intentando usar plantilla de la base de datos'
+        );
+
         try {
           // Intentar obtener la plantilla por código desde la base de datos
-          const { subject, body } = await this.notificationTemplateService.renderTemplate(
-            'password_reset', 
-            {
-              userName: user.first_name,
-              resetUrl: resetUrl,
-              expirationTime: '1 hora'
-            }
-          );
+          const { subject, body } =
+            await this.notificationTemplateService.renderTemplate(
+              'password_reset',
+              {
+                userName: user.first_name,
+                resetUrl: resetUrl,
+                expirationTime: '1 hora',
+              }
+            );
           emailHtml = body;
           emailSubject = subject;
         } catch (dbTemplateError) {
           // Si no existe la plantilla en la base de datos, usar la plantilla en línea
-          logger.warn('Plantilla de restablecimiento de contraseña no encontrada, usando plantilla por defecto');
+          logger.warn(
+            'Plantilla de restablecimiento de contraseña no encontrada, usando plantilla por defecto'
+          );
           emailHtml = `
             <h1>Restablecimiento de contraseña</h1>
             <p>Hola ${user.first_name},</p>
@@ -434,14 +456,14 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
           `;
         }
       }
-      
+
       // Enviar el correo
       await this.emailService.sendEmail({
         to: user.email,
         subject: emailSubject,
-        html: emailHtml
+        html: emailHtml,
       });
-      
+
       logger.info(`Email de restablecimiento enviado a ${user.email}`);
     } catch (error) {
       logger.error('Error al enviar email de restablecimiento:', error);
@@ -539,19 +561,28 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
    * @param newPassword Nueva contraseña
    * @returns Respuesta de autenticación
    */
-  async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<IAuthResponse> {
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<IAuthResponse> {
     // Buscar usuario por ID
     const user = await this.userRepository.findById(userId);
-    
+
     if (!user) {
       throw new NotFoundError('Usuario no encontrado');
     }
 
     // Buscar usuario por email para incluir la contraseña
-    const userWithPassword = await this.userRepository.findByEmail(user.email, true);
-    
+    const userWithPassword = await this.userRepository.findByEmail(
+      user.email,
+      true
+    );
+
     if (!userWithPassword || !userWithPassword.password_hash) {
-      throw new UnauthorizedError('Este usuario no tiene contraseña configurada');
+      throw new UnauthorizedError(
+        'Este usuario no tiene contraseña configurada'
+      );
     }
 
     // Verificar contraseña actual (compatible con MD5 y PBKDF2)
@@ -608,14 +639,14 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
     const userRoleRepository = AppDataSource.getRepository(UserRole);
     const userRole = await userRoleRepository.findOne({
       where: { user_id: user.id, is_active: true },
-      relations: ['role']
+      relations: ['role'],
     });
 
     const payload: JwtPayload = {
       id: user.id,
       email: user.email,
       name: user.first_name,
-      role: userRole?.role?.role_name || 'usuario'
+      role: userRole?.role?.role_name || 'usuario',
     };
 
     // @ts-ignore - Forzar a TypeScript a ignorar este error específico
@@ -630,19 +661,27 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
    * @param password Contraseña a verificar
    * @returns Respuesta de autenticación
    */
-  async verifyPasswordForDeletion(userId: number, password: string): Promise<IAuthResponse> {
+  async verifyPasswordForDeletion(
+    userId: number,
+    password: string
+  ): Promise<IAuthResponse> {
     // Buscar usuario por ID
     const user = await this.userRepository.findById(userId);
-    
+
     if (!user) {
       throw new NotFoundError('Usuario no encontrado');
     }
 
     // Buscar usuario por email para incluir la contraseña
-    const userWithPassword = await this.userRepository.findByEmail(user.email, true);
-    
+    const userWithPassword = await this.userRepository.findByEmail(
+      user.email,
+      true
+    );
+
     if (!userWithPassword || !userWithPassword.password_hash) {
-      throw new UnauthorizedError('Este usuario no tiene contraseña configurada');
+      throw new UnauthorizedError(
+        'Este usuario no tiene contraseña configurada'
+      );
     }
 
     // Verificar contraseña (compatible con MD5 y PBKDF2)
@@ -672,7 +711,7 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
       'Preocupaciones de privacidad',
       'Problemas técnicos',
       'Servicio al cliente',
-      'Otro motivo'
+      'Otro motivo',
     ];
 
     // Texto de confirmación que el usuario debe escribir
@@ -680,7 +719,7 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
 
     return {
       reasons,
-      confirmationText
+      confirmationText,
     };
   }
 
@@ -690,7 +729,10 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
    * @param deleteData Datos para eliminación de cuenta
    * @returns Respuesta de autenticación
    */
-  async deleteAccount(userId: number, deleteData: IDeleteAccountData): Promise<IAuthResponse> {
+  async deleteAccount(
+    userId: number,
+    deleteData: IDeleteAccountData
+  ): Promise<IAuthResponse> {
     const { password, confirmation, reason, otherReason } = deleteData;
 
     // Verificar que la confirmación sea correcta
@@ -703,7 +745,11 @@ async login(credentials: ILoginCredentials): Promise<IAuthResponse> {
     await this.verifyPasswordForDeletion(userId, password);
 
     // Registrar la razón de eliminación (esto podría guardarse en una tabla de auditoría)
-    logger.info(`Usuario ${userId} eliminó su cuenta. Razón: ${reason || 'No especificada'} ${otherReason ? `- ${otherReason}` : ''}`);
+    logger.info(
+      `Usuario ${userId} eliminó su cuenta. Razón: ${
+        reason || 'No especificada'
+      } ${otherReason ? `- ${otherReason}` : ''}`
+    );
 
     // Eliminar usuario (o marcar como inactivo, dependiendo de la política de la aplicación)
     // Opción 1: Eliminar completamente

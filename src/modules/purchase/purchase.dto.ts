@@ -2,6 +2,7 @@ import { ServiceCategory } from '@models/service.model';
 import { PaymentStatus } from '../../models/purchase.model';
 import { WompiPaymentMethod } from '../payment/payment.interface';
 import { IdentificationType } from '@models/temporary-customer.model';
+import { PaginationParams, PaginatedResult } from '../../core/interfaces/response.interface';
 
 export interface CreatePurchaseDto {
   user_id: number;
@@ -109,6 +110,22 @@ export interface CreateCashPurchaseDto {
   };
 }
 
+export interface CreateServiceCashPurchaseDto {
+  user_id: number;
+  service_id: number;
+  amount_paid: number;
+  customer_info: {
+    email: string;
+    full_name: string;
+    phone_number?: string;
+  };
+  payment_details?: {
+    notes?: string;
+    reference?: string;
+  };
+  sessions_quantity?: number;
+}
+
 export interface CreateAdminServicePurchaseDto {
   // Datos del cliente temporal
   customer_data: {
@@ -129,4 +146,17 @@ export interface CreateAdminServicePurchaseDto {
   sessions_quantity?: number;
   discount_percentage?: number;
   admin_notes?: string;
+}
+
+export interface PurchaseFiltersDto extends PaginationParams {
+  user_id?: number;
+  payment_status?: PaymentStatus;
+  purchase_type?: 'package' | 'service';
+  payment_method?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface PaginatedPurchasesResponseDto extends PaginatedResult<PurchaseResponseDto> {
+  filters?: PurchaseFiltersDto;
 }

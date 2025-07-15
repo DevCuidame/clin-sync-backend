@@ -302,7 +302,7 @@ export class PaymentController {
     logger.info('Getting transaction status', { transactionId });
 
     // Verificar si es una transacción de efectivo
-    if (transactionId.startsWith('CASH-')) {
+    if (transactionId.startsWith('CASH-') || transactionId.startsWith('CS-CASH-')) {
       // Para transacciones de efectivo, consultar la base de datos local
       const cashTransaction = await this.getCashTransactionStatus(transactionId);
       

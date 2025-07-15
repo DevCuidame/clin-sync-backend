@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { UnauthorizedError } from '../utils/error-handler';
 import config from '../core/config/environment';
 import { AppDataSource } from '../core/config/database';
+import { User } from '../models/user.model';
 
 // Extender interface de Request para incluir usuario
 declare global {
@@ -45,7 +46,7 @@ export const authMiddleware = async (
     }
 
     // 3) Comprobar si el usuario todavía existe
-    const userRepository = AppDataSource.getRepository('users');
+    const userRepository = AppDataSource.getRepository(User);
     const currentUser = await userRepository.findOne({ 
       where: { id: decoded.id }
     });
@@ -96,7 +97,7 @@ export const refreshTokenMiddleware = async (
     }
 
     // Comprobar si el usuario todavía existe
-    const userRepository = AppDataSource.getRepository('users');
+    const userRepository = AppDataSource.getRepository(User);
     const currentUser = await userRepository.findOne({ 
       where: { id: decoded.id }
     });

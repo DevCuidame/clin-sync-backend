@@ -19,6 +19,7 @@ import { paymentRoutes } from '../modules/payment/payment.routes';
 import timeSlotRoutes from '../modules/time-slot/time-slot.routes';
 import reviewRoutes from '../modules/review/review.routes';
 import { databaseCleanupRoutes } from '../modules/database-cleanup';
+import temporaryCustomerRoutes from '../modules/temporary-customer/temporary-customer.routes';
 
 const router = Router();
 
@@ -44,5 +45,7 @@ router.use('/payments', paymentRoutes);
 router.use('/reviews', reviewRoutes);
 // Rutas de limpieza de base de datos
 router.use('/database-cleanup', databaseCleanupRoutes);
+// Rutas de clientes temporales
+router.use('/temporary-customers', temporaryCustomerRoutes);
 
 export default router;
