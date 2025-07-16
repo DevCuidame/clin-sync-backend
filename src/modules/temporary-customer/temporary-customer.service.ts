@@ -3,6 +3,7 @@ import { UserSession, UserSessionStatus } from '../../models/user-session.model'
 import { Purchase } from '../../models/purchase.model';
 import { Service } from '../../models/service.model';
 import { User } from '../../models/user.model';
+import { Appointment } from '../../models/appointment.model';
 import { Repository, Like, MoreThan } from 'typeorm';
 import { NotFoundError } from '../../utils/error-handler';
 import { AppDataSource } from '../../core/config/database';
@@ -33,11 +34,13 @@ export class TemporaryCustomerService {
   private temporaryCustomerRepository: Repository<TemporaryCustomer>;
   private purchaseRepository: Repository<Purchase>;
   private userSessionRepository: Repository<UserSession>;
+  private appointmentRepository: Repository<Appointment>;
 
   constructor() {
     this.temporaryCustomerRepository = AppDataSource.getRepository(TemporaryCustomer);
     this.purchaseRepository = AppDataSource.getRepository(Purchase);
     this.userSessionRepository = AppDataSource.getRepository(UserSession);
+    this.appointmentRepository = AppDataSource.getRepository(Appointment);
   }
 
   /**
@@ -223,7 +226,16 @@ export class TemporaryCustomerService {
    * Obtener historial completo de sesiones de un cliente temporal
    * Incluye información detallada de cada sesión ordenada cronológicamente
    */
-  async getCustomerSessionHistory(customerId: number): Promise<{
+  async getCustomerSessionHistory(
+    customerId: number,
+    filters?: {
+      startDate?: Date;
+      endDate?: Date;
+      page?: number;
+      limit?: number;
+      status?: string;
+    }
+  ): Promise<{
     customer: TemporaryCustomer;
     sessionHistory: UserSession[];
     summary: {
@@ -233,6 +245,12 @@ export class TemporaryCustomerService {
       firstPurchaseDate: Date | null;
       lastActivityDate: Date | null;
       sessionsByStatus: Record<string, number>;
+    };
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalItems: number;
+      itemsPerPage: number;
     };
   }> {
     try {
@@ -245,28 +263,98 @@ export class TemporaryCustomerService {
         throw new NotFoundError('Cliente temporal no encontrado');
       }
 
-      // Obtener todas las sesiones del cliente con información completa
-      const sessionHistory = await this.userSessionRepository
+      // Configurar valores por defecto para paginación
+      const page = filters?.page || 1;
+      const limit = filters?.limit || 10;
+      const offset = (page - 1) * limit;
+
+      // Construir query base para sesiones
+      let sessionQueryBuilder = this.userSessionRepository
         .createQueryBuilder('session')
         .leftJoinAndSelect('session.service', 'service')
         .leftJoinAndSelect('session.purchase', 'purchase')
         .leftJoinAndSelect('purchase.package', 'package')
-        .where('purchase.temp_customer_id = :customerId', { customerId })
+        .leftJoinAndSelect('session.appointments', 'appointments')
+        .leftJoinAndSelect('appointments.professional', 'professional')
+        .leftJoinAndSelect('professional.user', 'professionalUser')
+        .where('purchase.temp_customer_id = :customerId', { customerId });
+
+      // Aplicar filtros por fecha si se proporcionan
+      if (filters?.startDate) {
+        sessionQueryBuilder = sessionQueryBuilder.andWhere(
+          'session.created_at >= :startDate',
+          { startDate: filters.startDate }
+        );
+      }
+
+      if (filters?.endDate) {
+        // Agregar 23:59:59 al final del día para incluir todo el día
+        const endOfDay = new Date(filters.endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        sessionQueryBuilder = sessionQueryBuilder.andWhere(
+          'session.created_at <= :endDate',
+          { endDate: endOfDay }
+        );
+      }
+
+      // Aplicar filtro por estado si se proporciona
+      if (filters?.status) {
+        if (filters.status === 'active') {
+          sessionQueryBuilder = sessionQueryBuilder.andWhere(
+            'session.status = :status',
+            { status: UserSessionStatus.ACTIVE }
+          );
+        } else if (filters.status !== 'all') {
+          // Si no es 'active' ni 'all', filtrar por el estado específico
+          sessionQueryBuilder = sessionQueryBuilder.andWhere(
+            'session.status = :status',
+            { status: filters.status }
+          );
+        }
+        // Si es 'all', no aplicar filtro de estado (mostrar todas)
+      }
+
+      // Contar total de elementos para paginación
+      const totalItems = await sessionQueryBuilder.getCount();
+
+      // Obtener sesiones con paginación
+      const sessionHistory = await sessionQueryBuilder
         .orderBy('session.created_at', 'DESC')
+        .addOrderBy('appointments.scheduled_at', 'DESC')
+        .skip(offset)
+        .take(limit)
         .getMany();
 
-      // Obtener información de compras para el resumen
-      const purchases = await this.purchaseRepository
+      // Obtener información de compras para el resumen (sin filtros de fecha para estadísticas generales)
+      let purchaseQueryBuilder = this.purchaseRepository
         .createQueryBuilder('purchase')
-        .where('purchase.temp_customer_id = :customerId', { customerId })
-        .getMany();
+        .where('purchase.temp_customer_id = :customerId', { customerId });
+
+      // Aplicar filtros por fecha a las compras también si se proporcionan
+      if (filters?.startDate) {
+        purchaseQueryBuilder = purchaseQueryBuilder.andWhere(
+          'purchase.created_at >= :startDate',
+          { startDate: filters.startDate }
+        );
+      }
+
+      if (filters?.endDate) {
+        const endOfDay = new Date(filters.endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        purchaseQueryBuilder = purchaseQueryBuilder.andWhere(
+          'purchase.created_at <= :endDate',
+          { endDate: endOfDay }
+        );
+      }
+
+      const purchases = await purchaseQueryBuilder.getMany();
 
       // Calcular resumen
       const validPurchaseDates = purchases.filter(p => p.updated_at).map(p => p.updated_at.getTime());
       const validSessionDates = sessionHistory.filter(s => s.updated_at).map(s => s.updated_at.getTime());
       
       const summary = {
-        totalSessions: sessionHistory.length,
+        totalSessions: totalItems, // Usar el total de elementos, no solo los de la página actual
         totalPurchases: purchases.length,
         totalAmountSpent: purchases.reduce((total, purchase) => total + (purchase.amount_paid || 0), 0),
         firstPurchaseDate: validPurchaseDates.length > 0 ? 
@@ -279,10 +367,20 @@ export class TemporaryCustomerService {
         }, {} as Record<string, number>)
       };
 
+      // Calcular información de paginación
+      const totalPages = Math.ceil(totalItems / limit);
+      const pagination = {
+        currentPage: page,
+        totalPages,
+        totalItems,
+        itemsPerPage: limit
+      };
+
       return {
         customer,
         sessionHistory,
-        summary
+        summary,
+        pagination
       };
     } catch (error) {
       console.error('Error getting customer session history:', error);

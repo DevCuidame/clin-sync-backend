@@ -24,6 +24,9 @@ export class UserSession {
   @Column()
   sessions_remaining!: number;
 
+  @Column()
+  sessions_purchased!: number;
+
   @Column({ type: 'timestamp' })
   expires_at!: Date;
 

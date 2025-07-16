@@ -1,23 +1,26 @@
 import { Repository } from 'typeorm';
 import { AppDataSource } from '../../core/config/database';
-import { Schedule, DayOfWeek } from '../../models/schedule.model';
+import { DayOfWeek, Schedule } from '../../models/schedule.model';
 import { AvailabilityException, ExceptionType } from '../../models/availability-exception.model';
 import { TimeSlot, SlotStatus } from '../../models/time-slot.model';
 import { Professional } from '../../models/professional.model';
-import { TimeSlotResponseDto } from './time-slot.interface';
+import { Appointment, AppointmentStatus } from '../../models/appointment.model';
 import { createLocalDate } from '../../utils/date-format';
+import { TimeSlotResponseDto } from './time-slot.interface';
 
 export class DynamicSlotService {
   private scheduleRepository: Repository<Schedule>;
   private availabilityExceptionRepository: Repository<AvailabilityException>;
   private timeSlotRepository: Repository<TimeSlot>;
   private professionalRepository: Repository<Professional>;
+  private appointmentRepository: Repository<Appointment>;
 
   constructor() {
     this.scheduleRepository = AppDataSource.getRepository(Schedule);
     this.availabilityExceptionRepository = AppDataSource.getRepository(AvailabilityException);
     this.timeSlotRepository = AppDataSource.getRepository(TimeSlot);
     this.professionalRepository = AppDataSource.getRepository(Professional);
+    this.appointmentRepository = AppDataSource.getRepository(Appointment);
   }
 
   async generateVirtualSlots(
@@ -55,13 +58,17 @@ export class DynamicSlotService {
       // 5. Obtener slots ya existentes para evitar duplicados
       const existingSlots = await this.getExistingSlotsForDate(professionalId, date);
       
-      // 6. Generar slots virtuales
+      // 6. Obtener citas existentes para verificar conflictos
+      const existingAppointments = await this.getExistingAppointmentsForDate(professionalId, date);
+      
+      // 7. Generar slots virtuales
       const virtualSlots = this.generateSlotsFromSchedule(
         schedule,
         date,
         duration,
         exceptions,
-        existingSlots
+        existingSlots,
+        existingAppointments
       );
 
       return virtualSlots;
@@ -139,12 +146,32 @@ export class DynamicSlotService {
     });
   }
 
+  private async getExistingAppointmentsForDate(
+    professionalId: number,
+    date: string
+  ): Promise<Appointment[]> {
+    const startOfDay = createLocalDate(date);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+    
+    return await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .where('appointment.professional_id = :professionalId', { professionalId })
+      .andWhere('appointment.status IN (:...statuses)', {
+        statuses: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]
+      })
+      .andWhere('appointment.scheduled_at >= :startOfDay', { startOfDay })
+      .andWhere('appointment.scheduled_at < :endOfDay', { endOfDay })
+      .getMany();
+  }
+
   private generateSlotsFromSchedule(
     schedule: Schedule,
     date: string,
     duration: number,
     exceptions: AvailabilityException[],
-    existingSlots: TimeSlot[]
+    existingSlots: TimeSlot[],
+    existingAppointments: Appointment[]
   ): TimeSlotResponseDto[] {
     const slots: TimeSlotResponseDto[] = [];
     const startTime = this.parseTime(schedule.start_time);
@@ -177,7 +204,15 @@ export class DynamicSlotService {
          (currentTime + duration > breakStartTime && currentTime + duration <= breakEndTime) ||
          (currentTime <= breakStartTime && currentTime + duration >= breakEndTime));
       
-      if (!existingSlot && !isInBreakTime) {
+      // Verificar si hay una cita conflictiva en este horario
+      const hasAppointmentConflict = this.checkAppointmentConflict(
+        date,
+        slotStartTime,
+        slotEndTime,
+        existingAppointments
+      );
+      
+      if (!existingSlot && !isInBreakTime && !hasAppointmentConflict) {
         // Verificar si hay excepciones que afecten este horario
         const isBlocked = this.isTimeBlocked(
           slotStartTime,
@@ -225,20 +260,37 @@ export class DynamicSlotService {
     exceptions: AvailabilityException[]
   ): boolean {
     return exceptions.some(exception => {
-      if (!exception.start_time || !exception.end_time) {
-        return false;
+      if (exception.type === ExceptionType.UNAVAILABLE) {
+        const exceptionStart = exception.start_time || '00:00';
+        const exceptionEnd = exception.end_time || '23:59';
+        
+        // Verificar si hay solapamiento
+        return (
+          (startTime >= exceptionStart && startTime < exceptionEnd) ||
+          (endTime > exceptionStart && endTime <= exceptionEnd) ||
+          (startTime <= exceptionStart && endTime >= exceptionEnd)
+        );
       }
+      return false;
+    });
+  }
+
+  private checkAppointmentConflict(
+    date: string,
+    slotStartTime: string,
+    slotEndTime: string,
+    existingAppointments: Appointment[]
+  ): boolean {
+    const slotStart = createLocalDate(`${date}T${slotStartTime}:00`);
+    const slotEnd = createLocalDate(`${date}T${slotEndTime}:00`);
+    
+    return existingAppointments.some(appointment => {
+      const appointmentStart = new Date(appointment.scheduled_at);
+      const appointmentEnd = new Date(appointmentStart.getTime() + appointment.duration_minutes * 60000);
       
-      const exceptionStart = this.parseTime(exception.start_time);
-      const exceptionEnd = this.parseTime(exception.end_time);
-      const slotStart = this.parseTime(startTime);
-      const slotEnd = this.parseTime(endTime);
-      
-      // Verificar si hay solapamiento
+      // Verificar si hay solapamiento entre el slot y la cita
       return (
-        (slotStart >= exceptionStart && slotStart < exceptionEnd) ||
-        (slotEnd > exceptionStart && slotEnd <= exceptionEnd) ||
-        (slotStart <= exceptionStart && slotEnd >= exceptionEnd)
+        (slotStart < appointmentEnd && slotEnd > appointmentStart)
       );
     });
   }

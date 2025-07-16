@@ -432,6 +432,7 @@ export class TimeSlotController {
           autoGenerate
         }
       );
+      console.log("🚀 ~ TimeSlotController ~ checkAvailability ~ availability:", availability)
       
       res.status(200).json({
         success: true,
@@ -439,7 +440,7 @@ export class TimeSlotController {
         data: availability
       });
     } catch (error: any) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: error.message || 'Error checking availability'
       });

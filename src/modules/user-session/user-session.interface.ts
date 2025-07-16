@@ -9,6 +9,7 @@ export interface IUserSession {
   purchase_id: number;
   service_id: number;
   sessions_remaining: number;
+  sessions_purchased: number;
   expires_at: Date;
   status: UserSessionStatus;
   created_at: Date;
@@ -24,6 +25,7 @@ export interface ICreateUserSessionData {
   purchase_id: number;
   service_id: number;
   sessions_remaining: number;
+  sessions_purchased: number;
   expires_at: Date;
   status?: UserSessionStatus;
 }

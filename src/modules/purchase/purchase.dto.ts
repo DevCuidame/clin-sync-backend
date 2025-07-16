@@ -155,6 +155,7 @@ export interface PurchaseFiltersDto extends PaginationParams {
   payment_method?: string;
   start_date?: string;
   end_date?: string;
+  buyer_name?: string; // Filtro por nombre del comprador (user o temp_customer)
 }
 
 export interface PaginatedPurchasesResponseDto extends PaginatedResult<PurchaseResponseDto> {

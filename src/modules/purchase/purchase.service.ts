@@ -124,7 +124,7 @@ export class PurchaseService {
     return this.mapToResponseDto(savedPurchase);
   }
 
-  async getAllPurchases(userId?: number, paymentStatus?: string): Promise<PurchaseResponseDto[]> {
+  async getAllPurchases(userId?: number, paymentStatus?: string, buyerName?: string): Promise<PurchaseResponseDto[]> {
     const queryBuilder = this.purchaseRepository
       .createQueryBuilder('purchase')
       .leftJoinAndSelect('purchase.user', 'user')
@@ -137,7 +137,23 @@ export class PurchaseService {
     }
     
     if (paymentStatus) {
-      queryBuilder.andWhere('purchase.payment_status = :paymentStatus', { paymentStatus });
+      // Normalizar el payment_status a minúsculas para que coincida con el enum
+      const normalizedPaymentStatus = paymentStatus.toLowerCase();
+      queryBuilder.andWhere('purchase.payment_status = :paymentStatus', { paymentStatus: normalizedPaymentStatus });
+    }
+    
+    // Filtrar por nombre del comprador (usuario o cliente temporal)
+    if (buyerName) {
+      const searchTerm = `%${buyerName.toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(CONCAT(user.first_name, \'\', user.last_name)) LIKE :searchTerm OR ' +
+        'LOWER(CONCAT(temporaryCustomer.first_name, \'\', temporaryCustomer.last_name)) LIKE :searchTerm OR ' +
+        'LOWER(user.first_name) LIKE :searchTerm OR ' +
+        'LOWER(user.last_name) LIKE :searchTerm OR ' +
+        'LOWER(temporaryCustomer.first_name) LIKE :searchTerm OR ' +
+        'LOWER(temporaryCustomer.last_name) LIKE :searchTerm)',
+        { searchTerm }
+      );
     }
     
     queryBuilder.orderBy('purchase.purchase_date', 'DESC');
@@ -157,7 +173,8 @@ export class PurchaseService {
       purchase_type,
       payment_method,
       start_date,
-      end_date
+      end_date,
+      buyer_name
     } = filters;
 
     const skip = (page - 1) * limit;
@@ -175,7 +192,9 @@ export class PurchaseService {
     }
 
     if (payment_status) {
-      queryBuilder.andWhere('purchase.payment_status = :paymentStatus', { paymentStatus: payment_status });
+      // Normalizar el payment_status a minúsculas para que coincida con el enum
+      const normalizedPaymentStatus = payment_status.toLowerCase();
+      queryBuilder.andWhere('purchase.payment_status = :paymentStatus', { paymentStatus: normalizedPaymentStatus });
     }
 
     if (purchase_type) {
@@ -192,6 +211,20 @@ export class PurchaseService {
 
     if (end_date) {
       queryBuilder.andWhere('purchase.purchase_date <= :endDate', { endDate: end_date });
+    }
+
+    // Filtrar por nombre del comprador (usuario o cliente temporal)
+    if (buyer_name) {
+      const searchTerm = `%${buyer_name.toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(CONCAT(user.first_name, \'\', user.last_name)) LIKE :searchTerm OR ' +
+        'LOWER(CONCAT(temporaryCustomer.first_name, \'\', temporaryCustomer.last_name)) LIKE :searchTerm OR ' +
+        'LOWER(user.first_name) LIKE :searchTerm OR ' +
+        'LOWER(user.last_name) LIKE :searchTerm OR ' +
+        'LOWER(temporaryCustomer.first_name) LIKE :searchTerm OR ' +
+        'LOWER(temporaryCustomer.last_name) LIKE :searchTerm)',
+        { searchTerm }
+      );
     }
 
     // Aplicar ordenamiento
@@ -853,7 +886,8 @@ export class PurchaseService {
       const userSession = userSessionRepository.create({
         service_id: purchase.service_id,
         purchase_id: purchase.purchase_id,
-        sessions_remaining: 1, 
+        sessions_remaining: 1,
+        sessions_purchased: 1,
         status: UserSessionStatus.ACTIVE,
         expires_at: purchase.expires_at
       });
@@ -936,6 +970,7 @@ export class PurchaseService {
         service_id: session.service_id,
         status: session.status,
         sessions_remaining: session.sessions_remaining,
+        sessions_purchased: session.sessions_purchased,
         created_at: session.created_at,
         expires_at: session.expires_at
       })) : []

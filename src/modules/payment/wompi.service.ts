@@ -704,6 +704,7 @@ export class WompiService {
              purchase_id: purchase.purchase_id,
              service_id: packageService.service_id,
              sessions_remaining: packageService.sessions_included,
+             sessions_purchased: packageService.sessions_included,
              expires_at: purchase.expires_at,
              status: UserSessionStatus.ACTIVE
            });
@@ -726,6 +727,7 @@ export class WompiService {
              purchase_id: purchase.purchase_id,
              service_id: purchase.service_id,
              sessions_remaining: 1, // Una sesión por cada registro
+             sessions_purchased: 1,
              expires_at: purchase.expires_at,
              status: UserSessionStatus.ACTIVE
            });

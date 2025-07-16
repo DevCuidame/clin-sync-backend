@@ -1,7 +1,7 @@
 import { Repository } from 'typeorm';
 import { AppDataSource } from '../../core/config/database';
 import { Package } from '../../models/package.model';
-import { Purchase } from '../../models/purchase.model';
+import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { Service } from '../../models/service.model';
 import { PackageService as PackageServiceModel } from '../../models/package-service.model';
 import { CreatePackageDto, UpdatePackageDto, PackageResponseDto, UserPackageWithSessionsDto, UserPackageStatus } from './package.dto';
@@ -233,7 +233,7 @@ export class PackageService {
       .innerJoinAndSelect('purchase.package', 'package')
       .leftJoinAndSelect('purchase.userSessions', 'userSession')
       .where('purchase.user_id = :userId', { userId })
-      .andWhere('purchase.payment_status = :status', { status: 'completed' })
+      .andWhere('purchase.payment_status = :status', { status: PaymentStatus.COMPLETED })
       .andWhere('purchase.package_id IS NOT NULL')
       .orderBy('purchase.purchase_date', 'DESC')
       .getMany();

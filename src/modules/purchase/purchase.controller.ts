@@ -26,7 +26,7 @@ export class PurchaseController {
         data: newPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error creating purchase',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -72,7 +72,7 @@ export class PurchaseController {
         data: newPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error creando compra en efectivo',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -92,7 +92,8 @@ export class PurchaseController {
         purchase_type, 
         payment_method, 
         start_date, 
-        end_date 
+        end_date,
+        buyer_name 
       } = req.query;
 
       // Si se proporcionan parámetros de paginación, usar el método paginado
@@ -107,7 +108,8 @@ export class PurchaseController {
            purchase_type: purchase_type as 'package' | 'service',
            payment_method: payment_method as string,
            start_date: start_date as string,
-           end_date: end_date as string
+           end_date: end_date as string,
+           buyer_name: buyer_name as string
          };
 
         const result = await this.purchaseService.getPaginatedPurchases(filters);
@@ -121,7 +123,8 @@ export class PurchaseController {
         // Mantener compatibilidad con la implementación anterior
         const purchases = await this.purchaseService.getAllPurchases(
           user_id ? parseInt(user_id as string) : undefined,
-          payment_status as string
+          payment_status as string,
+          buyer_name as string
         );
         res.status(200).json({
           success: true,
@@ -129,7 +132,7 @@ export class PurchaseController {
         });
       }
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error fetching purchases',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -155,7 +158,7 @@ export class PurchaseController {
         data: purchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error fetching purchase',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -172,7 +175,7 @@ export class PurchaseController {
         data: purchases
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error fetching user purchases',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -224,7 +227,7 @@ export class PurchaseController {
         }
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error buscando cliente temporal',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -263,7 +266,7 @@ export class PurchaseController {
         data: servicePurchases
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error fetching user service purchases',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -293,7 +296,7 @@ export class PurchaseController {
         data: updatedPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error updating purchase',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -321,7 +324,7 @@ export class PurchaseController {
         data: updatedPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error updating payment status',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -381,7 +384,7 @@ export class PurchaseController {
         data: confirmedPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error confirmando pago en efectivo',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -428,7 +431,7 @@ export class PurchaseController {
       const rejectedPurchase = await this.purchaseService.rejectCashPayment(parseInt(id), rejection_reason);
       
       if (!rejectedPurchase) {
-        res.status(500).json({
+        res.status(400).json({
           success: false,
           message: 'Error al rechazar el pago en efectivo'
         });
@@ -441,7 +444,7 @@ export class PurchaseController {
         data: rejectedPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error rechazando pago en efectivo',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -462,7 +465,7 @@ export class PurchaseController {
         data: pendingCashPayments
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error obteniendo pagos en efectivo pendientes',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -481,7 +484,7 @@ export class PurchaseController {
         data: activePurchases
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error retrieving active purchases',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -508,7 +511,7 @@ export class PurchaseController {
       });
     } catch (error) {
       const statusCode = error instanceof Error && error.message.includes('no encontrada') ? 404 : 
-                        error instanceof Error && error.message.includes('ya fueron creadas') ? 400 : 500;
+                        error instanceof Error && error.message.includes('ya fueron creadas') ? 400 : 400;
       
       res.status(statusCode).json({
         success: false,
@@ -564,7 +567,7 @@ export class PurchaseController {
       });
 
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error obteniendo estado de sesiones',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -596,7 +599,7 @@ export class PurchaseController {
       });
 
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error interno del servidor',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -619,7 +622,7 @@ export class PurchaseController {
       });
 
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error interno del servidor',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -699,7 +702,7 @@ export class PurchaseController {
         data: newPurchase
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error creando compra de servicio en efectivo',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -759,7 +762,7 @@ export class PurchaseController {
         data: purchaseDetails
       });
     } catch (error) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
         message: 'Error obteniendo detalles de la compra',
         error: error instanceof Error ? error.message : 'Unknown error'

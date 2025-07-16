@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { TemporaryCustomerController } from './temporary-customer.controller';
+import { TemporaryCustomerAppointmentController } from './temporary-customer-appointment.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import { restrictTo } from '../../middlewares/role.middleware';
 
 const router = Router();
 const temporaryCustomerController = new TemporaryCustomerController();
+const temporaryCustomerAppointmentController = new TemporaryCustomerAppointmentController();
 
 // Todas las rutas requieren autenticación y rol de admin o profesional
 router.use(authMiddleware);
@@ -54,5 +56,12 @@ router.get('/:customerId/complete', temporaryCustomerController.getCompleteCusto
  * @param customerId - ID del cliente temporal
  */
 router.get('/:customerId/history', temporaryCustomerController.getCustomerHistory);
+
+/**
+ * @route POST /api/temporary-customers/appointments/schedule
+ * @desc Crear una nueva cita para cliente temporal
+ * @access Admin, Professional
+ */
+router.post('/appointments/schedule', temporaryCustomerAppointmentController.createAppointment.bind(temporaryCustomerAppointmentController));
 
 export default router;

@@ -60,6 +60,7 @@ export class UserSessionService {
       purchase_id: data.purchase_id,
       service_id: data.service_id,
       sessions_remaining: data.sessions_remaining,
+      sessions_purchased: data.sessions_purchased,
       expires_at: data.expires_at,
       status: data.status || UserSessionStatus.ACTIVE
     });

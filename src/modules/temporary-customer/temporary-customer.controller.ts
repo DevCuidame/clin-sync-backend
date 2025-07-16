@@ -106,7 +106,6 @@ export class TemporaryCustomerController {
       }
 
       const completeInfo = await this.temporaryCustomerService.getCompleteCustomerInfo(customerId);
-      console.log("🚀 ~ TemporaryCustomerController ~ getCompleteCustomerInfo ~ completeInfo:", completeInfo)
 
       res.status(200).json({
         success: true,
@@ -121,16 +120,61 @@ export class TemporaryCustomerController {
   /**
    * Obtener historial completo de sesiones de un cliente temporal
    * GET /api/temporary-customers/:customerId/history
+   * Query params: startDate, endDate, page, limit, status
    */
   getCustomerHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const customerId = parseInt(req.params.customerId);
+      const { startDate, endDate, page = '1', limit = '10', status } = req.query;
 
       if (isNaN(customerId)) {
         throw new BadRequestError('Invalid customer ID');
       }
 
-      const historyData = await this.temporaryCustomerService.getCustomerSessionHistory(customerId);
+      // Validar parámetros de paginación
+      const pageNumber = parseInt(page as string);
+      const limitNumber = parseInt(limit as string);
+
+      if (isNaN(pageNumber) || pageNumber < 1) {
+        throw new BadRequestError('Page must be a positive number');
+      }
+
+      if (isNaN(limitNumber) || limitNumber < 1 || limitNumber > 100) {
+        throw new BadRequestError('Limit must be between 1 and 100');
+      }
+
+      // Validar fechas si se proporcionan
+      let startDateObj: Date | undefined;
+      let endDateObj: Date | undefined;
+
+      if (startDate) {
+        startDateObj = new Date(startDate as string);
+        if (isNaN(startDateObj.getTime())) {
+          throw new BadRequestError('Invalid start date format');
+        }
+      }
+
+      if (endDate) {
+        endDateObj = new Date(endDate as string);
+        if (isNaN(endDateObj.getTime())) {
+          throw new BadRequestError('Invalid end date format');
+        }
+      }
+
+      if (startDateObj && endDateObj && startDateObj > endDateObj) {
+        throw new BadRequestError('Start date cannot be after end date');
+      }
+
+      const historyData = await this.temporaryCustomerService.getCustomerSessionHistory(
+        customerId,
+        {
+          startDate: startDateObj,
+          endDate: endDateObj,
+          page: pageNumber,
+          limit: limitNumber,
+          status: status as string
+        }
+      );
 
       res.status(200).json({
         success: true,

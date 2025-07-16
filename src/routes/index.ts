@@ -20,6 +20,7 @@ import timeSlotRoutes from '../modules/time-slot/time-slot.routes';
 import reviewRoutes from '../modules/review/review.routes';
 import { databaseCleanupRoutes } from '../modules/database-cleanup';
 import temporaryCustomerRoutes from '../modules/temporary-customer/temporary-customer.routes';
+import emailTestRoutes from '../modules/notification/routes/email-test.routes';
 
 const router = Router();
 
@@ -47,5 +48,7 @@ router.use('/reviews', reviewRoutes);
 router.use('/database-cleanup', databaseCleanupRoutes);
 // Rutas de clientes temporales
 router.use('/temporary-customers', temporaryCustomerRoutes);
+// Rutas de prueba del sistema de correos (solo en desarrollo)
+router.use('/email-test', emailTestRoutes);
 
 export default router;
