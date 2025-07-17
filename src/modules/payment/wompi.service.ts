@@ -30,7 +30,7 @@ import logger from '../../utils/logger';
 import { AppDataSource } from '../../core/config/database';
 import { Purchase, PaymentStatus } from '../../models/purchase.model';
 import { PaymentTransaction, TransactionStatus } from '../../models/payment-transaction.model';
-import { PaymentWebhook } from '../../models/payment-webhook.model';
+import { PaymentWebhook, WebhookStatus } from '../../models/payment-webhook.model';
 import { Package } from '../../models/package.model';
 import { Service } from '../../models/service.model';
 import { User } from '../../models/user.model';
@@ -565,15 +565,42 @@ export class WompiService {
 
   private async saveWebhookEvent(event: WompiWebhookEvent): Promise<void> {
     const webhookRepository = AppDataSource.getRepository(PaymentWebhook);
+    const transactionRepository = AppDataSource.getRepository(PaymentTransaction);
+    
+    // Extraer el transaction ID del webhook
+    const gatewayTransactionId = event.data.transaction.id;
+    
+    // Buscar la transacción en nuestra base de datos
+    const paymentTransaction = await transactionRepository.findOne({
+      where: { gateway_transaction_id: gatewayTransactionId }
+    });
+    
+    if (!paymentTransaction) {
+      logger.warn('Payment transaction not found for webhook', {
+        gatewayTransactionId,
+        event: event.event
+      });
+      throw new Error(`Payment transaction not found for gateway transaction ID: ${gatewayTransactionId}`);
+    }
     
     const webhook = webhookRepository.create({
+      transaction_id: paymentTransaction.transaction_id,
+      provider: 'wompi',
       event_type: event.event,
       payload: JSON.stringify(event),
-      processed_at: new Date(),
-      signature: event.signature.checksum
+      status: WebhookStatus.RECEIVED,
+      signature: event.signature?.checksum || undefined,
+      processed_at: new Date()
     });
 
     await webhookRepository.save(webhook);
+    
+    logger.info('Webhook event saved successfully', {
+      webhookId: webhook.webhook_id,
+      transactionId: paymentTransaction.transaction_id,
+      gatewayTransactionId,
+      eventType: event.event
+    });
   }
 
   private verifyWebhookSignature(payload: any, signature: string): boolean {
