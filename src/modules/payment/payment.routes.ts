@@ -11,7 +11,7 @@ import { rateLimitMiddleware } from '../../middlewares/rateLimit.middleware';
 import { validateRequest } from '../../middlewares/validation.middleware';
 import { validateDto } from '../../middlewares/validator.middleware';
 import { validateContentType, validateBodySize } from '../../middlewares/validation.middleware';
-import { webhookLoggerMiddleware, webhookErrorMiddleware } from '../../middlewares/webhook-logger.middleware';
+
 import { SystemRoles } from '../../middlewares/role.middleware';
 import {
   CreateTransactionDto,
@@ -171,13 +171,11 @@ router.post(
  */
 router.post(
   '/webhooks',
-  webhookLoggerMiddleware,
   webhookRateLimit,
   validateContentType(['application/json']),
   validateBodySize(1024 * 1024),
   validateDto(WompiWebhookDto),
-  getPaymentController().handleWebhook,
-  webhookErrorMiddleware
+  getPaymentController().handleWebhook
 );
 
 /**

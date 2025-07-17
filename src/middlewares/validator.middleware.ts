@@ -20,22 +20,6 @@ export const validateDto = (dto: any, source: 'body' | 'query' | 'params' = 'bod
       });
       
       if (errors.length > 0) {
-        // Log detallado para webhooks
-        if (req.path.includes('/webhooks')) {
-          console.log('🔍 Webhook validation failed:', {
-            path: req.path,
-            method: req.method,
-            headers: req.headers,
-            bodyKeys: Object.keys(req[source] || {}),
-            bodyPreview: JSON.stringify(req[source]).substring(0, 500),
-            validationErrors: errors.map(error => ({
-              property: error.property,
-              value: error.value,
-              constraints: error.constraints
-            }))
-          });
-        }
-        
         // Formatear errores para una mejor experiencia de usuario
         const formattedErrors = errors.map(error => {
           const constraints = error.constraints || {};
@@ -53,7 +37,6 @@ export const validateDto = (dto: any, source: 'body' | 'query' | 'params' = 'bod
       req[source] = dtoObj;
       next();
     } catch (error) {
-      console.error('❌ Error in validateDto middleware:', error);
       return next(new BadRequestError('Error en la validación de datos'));
     }
   };
