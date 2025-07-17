@@ -220,6 +220,23 @@ CREATE TABLE appointments (
     FOREIGN KEY (user_session_id) REFERENCES user_sessions(user_session_id) ON DELETE SET NULL
 );
 
+ALTER TABLE appointments 
+ADD COLUMN google_calendar_event_id VARCHAR(255) NULL;
+
+-- Agregar comentario a la columna
+COMMENT ON COLUMN appointments.google_calendar_event_id IS 'ID del evento correspondiente en Google Calendar';
+
+-- Crear índice para mejorar las consultas por google_calendar_event_id
+CREATE INDEX idx_appointments_google_calendar_event_id 
+ON appointments(google_calendar_event_id) 
+WHERE google_calendar_event_id IS NOT NULL;
+
+-- Verificar que la migración se aplicó correctamente
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'appointments' 
+AND column_name = 'google_calendar_event_id';
+
 -- Tabla de horarios de profesionales
 CREATE TABLE schedules (
     schedule_id SERIAL PRIMARY KEY,
@@ -415,3 +432,120 @@ VALUES
         '{"manage_reviews": true, "manage_content": true}',
         TRUE
     );
+
+ CREATE TYPE identification_type_enum AS ENUM ('CC', 'CE', 'TI', 'PP', 'NIT');
+
+CREATE TABLE temporary_customers (
+  temp_customer_id SERIAL PRIMARY KEY,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  phone VARCHAR(20),
+  email VARCHAR(255),
+  identification_number VARCHAR(50),
+  identification_type identification_type_enum DEFAULT 'CC',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_by INT, -- ID del administrador que creó el registro
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+
+-- Agregar columnas para soporte de compra de servicios
+ALTER TABLE purchases 
+ADD COLUMN service_id INTEGER REFERENCES services(service_id),
+ADD COLUMN purchase_type VARCHAR(20) DEFAULT 'package' CHECK (purchase_type IN ('package', 'service'));
+
+-- Hacer package_id opcional
+ALTER TABLE purchases 
+ALTER COLUMN package_id DROP NOT NULL;
+
+-- Agregar constraint para asegurar que se especifique package_id O service_id
+ALTER TABLE purchases 
+ADD CONSTRAINT check_purchase_target 
+CHECK (
+  (package_id IS NOT NULL AND service_id IS NULL) OR 
+  (package_id IS NULL AND service_id IS NOT NULL)
+);
+
+-- Actualizar user_sessions para soportar compras de servicios
+ALTER TABLE user_sessions 
+ALTER COLUMN purchase_id DROP NOT NULL;
+
+
+
+-- Migración para agregar soporte de clientes temporales a las compras
+-- Fecha: 2024
+-- Descripción: Agrega el campo temp_customer_id para vincular compras con clientes temporales
+
+-- Agregar columna para clientes temporales (opcional)
+ALTER TABLE purchases 
+ADD COLUMN temp_customer_id INTEGER NULL;
+
+-- Agregar foreign key constraint
+ALTER TABLE purchases 
+ADD CONSTRAINT fk_purchases_temp_customer 
+FOREIGN KEY (temp_customer_id) REFERENCES temporary_customers(temp_customer_id) ON DELETE SET NULL;
+
+-- Crear índice para mejorar las consultas por temp_customer_id
+CREATE INDEX idx_purchases_temp_customer_id 
+ON purchases(temp_customer_id) 
+WHERE temp_customer_id IS NOT NULL;
+
+-- Agregar comentario a la columna
+COMMENT ON COLUMN purchases.temp_customer_id IS 'ID del cliente temporal para compras realizadas por administradores';
+
+-- Modificar el constraint existente para permitir compras con clientes temporales
+-- Primero eliminar el constraint existente si existe
+ALTER TABLE purchases DROP CONSTRAINT IF EXISTS check_purchase_target;
+
+-- Agregar nuevo constraint que permita:
+-- 1. user_id con package_id o service_id (compras normales)
+-- 2. temp_customer_id con service_id (compras admin para clientes temporales)
+ALTER TABLE purchases 
+ADD CONSTRAINT check_purchase_target_with_temp 
+CHECK (
+  -- Compra normal de usuario: user_id requerido, package_id O service_id
+  (user_id IS NOT NULL AND temp_customer_id IS NULL AND 
+   ((package_id IS NOT NULL AND service_id IS NULL) OR 
+    (package_id IS NULL AND service_id IS NOT NULL))) OR
+  -- Compra admin para cliente temporal: temp_customer_id requerido, solo service_id
+  (temp_customer_id IS NOT NULL AND user_id IS NOT NULL AND 
+   package_id IS NULL AND service_id IS NOT NULL)
+);
+
+-- Verificar que la migración se aplicó correctamente
+SELECT 
+    column_name, 
+    data_type, 
+    is_nullable,
+    column_default
+FROM information_schema.columns 
+WHERE table_name = 'purchases' 
+AND column_name = 'temp_customer_id';
+
+
+-- Script para agregar el campo sessions_purchased a la tabla user_sessions
+-- Este campo registrará las sesiones compradas inicialmente para llevar un mejor control
+
+ALTER TABLE user_sessions 
+ADD COLUMN sessions_purchased INTEGER NOT NULL DEFAULT 0;
+
+-- Actualizar registros existentes: establecer sessions_purchased igual a sessions_remaining + sesiones ya utilizadas
+-- Para registros existentes, asumimos que sessions_purchased = sessions_remaining (si no hay appointments)
+-- o calculamos basado en appointments existentes
+
+UPDATE user_sessions 
+SET sessions_purchased = sessions_remaining 
+WHERE sessions_purchased = 0;
+
+-- Comentario: Para registros con appointments existentes, se podría ejecutar una consulta más compleja
+-- para calcular las sesiones utilizadas y sumarlas a sessions_remaining para obtener sessions_purchased
+-- Ejemplo:
+-- UPDATE user_sessions 
+-- SET sessions_purchased = sessions_remaining + (
+--     SELECT COUNT(*) 
+--     FROM appointments 
+--     WHERE appointments.user_session_id = user_sessions.user_session_id 
+--     AND appointments.status IN ('completed', 'confirmed', 'scheduled')
+-- )
+-- WHERE sessions_purchased = 0;
