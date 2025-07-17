@@ -502,7 +502,10 @@ export class WompiService {
       gateway_response: JSON.stringify(transaction)
     });
 
-    await transactionRepository.save(paymentTransaction);
+    const savedTransaction = await transactionRepository.save(paymentTransaction);
+    
+    // Procesar webhooks huérfanos que puedan haber llegado antes que esta transacción
+    await this.processOrphanedWebhooks(transaction.id, savedTransaction.transaction_id);
   }
 
   private async updateTransactionStatus(transactionId: string, status: WompiTransactionStatus): Promise<void> {
@@ -564,10 +567,21 @@ export class WompiService {
   }
 
   private async saveWebhookEvent(event: WompiWebhookEvent): Promise<void> {
+    // Validar estructura del webhook antes de procesarlo
+    if (!this.validateWompiWebhookStructure(event)) {
+      logger.error('Invalid webhook structure received', {
+        event: event?.event,
+        hasData: !!(event?.data),
+        hasTransaction: !!(event?.data?.transaction)
+      });
+      return;
+    }
+
     const webhookRepository = AppDataSource.getRepository(PaymentWebhook);
     const transactionRepository = AppDataSource.getRepository(PaymentTransaction);
     
-    // Extraer el transaction ID del webhook
+    // Extraer el gateway transaction ID del evento
+    // Wompi siempre envía el ID en event.data.transaction.id
     const gatewayTransactionId = event.data.transaction.id;
     
     // Buscar la transacción en nuestra base de datos
@@ -576,11 +590,37 @@ export class WompiService {
     });
     
     if (!paymentTransaction) {
-      logger.warn('Payment transaction not found for webhook', {
+      logger.warn('Payment transaction not found for webhook - this might be a new purchase', {
         gatewayTransactionId,
         event: event.event
       });
-      throw new Error(`Payment transaction not found for gateway transaction ID: ${gatewayTransactionId}`);
+      
+      // Para compras nuevas, crear un webhook sin transaction_id y marcarlo como pendiente
+      // Esto permite procesar el webhook aunque la transacción no esté en nuestra BD aún
+      const webhook = webhookRepository.create({
+        // transaction_id se omite para que sea undefined (nullable)
+        provider: 'wompi',
+        event_type: event.event,
+        payload: JSON.stringify(event),
+        status: WebhookStatus.RECEIVED,
+        signature: event.signature?.checksum || undefined,
+        error_message: `Transaction not found: ${gatewayTransactionId}`,
+        processed_at: new Date()
+      });
+      
+      await webhookRepository.save(webhook);
+      
+      logger.info('Webhook saved as orphaned - transaction not found (likely new purchase)', {
+        webhookId: webhook.webhook_id,
+        gatewayTransactionId,
+        eventType: event.event,
+        customerEmail: event.data.transaction?.customerEmail,
+        amount: event.data.transaction?.amountInCents,
+        status: event.data.transaction?.status,
+        note: 'This webhook will be processed when the corresponding transaction is created'
+      });
+      
+      return; // Salir sin procesar el evento
     }
     
     const webhook = webhookRepository.create({
@@ -602,6 +642,195 @@ export class WompiService {
       eventType: event.event
     });
   }
+
+  /**
+   * Procesa webhooks huérfanos (sin transaction_id) cuando se crea una nueva transacción
+   * 
+   * Este método maneja el escenario de race condition donde:
+   * 1. Wompi envía un webhook inmediatamente después de procesar el pago
+   * 2. El webhook llega antes de que nuestra aplicación haya guardado la transacción
+   * 3. El webhook se guarda como "huérfano" con transaction_id = null
+   * 4. Cuando finalmente se crea la transacción, este método los vincula y procesa
+   * 
+   * @param gatewayTransactionId - ID de transacción de Wompi (ej: "157817-1752769493-72064")
+   * @param transactionId - ID interno de nuestra tabla payment_transactions
+   */
+  async processOrphanedWebhooks(gatewayTransactionId: string, transactionId: number): Promise<void> {
+    try {
+      const webhookRepository = AppDataSource.getRepository(PaymentWebhook);
+      
+      // Buscar webhooks sin transaction_id para este gateway transaction ID
+      // Usar el campo específico transaction.id que siempre está presente en webhooks de Wompi
+      const orphanedWebhooks = await webhookRepository
+        .createQueryBuilder('webhook')
+        .where('webhook.transaction_id IS NULL')
+        .andWhere('JSON_EXTRACT(webhook.payload, "$.data.transaction.id") = :gatewayTransactionId', {
+          gatewayTransactionId
+        })
+        .getMany();
+      
+      if (orphanedWebhooks.length > 0) {
+        // Actualizar webhooks huérfanos con el transaction_id correcto
+        await webhookRepository
+          .createQueryBuilder()
+          .update(PaymentWebhook)
+          .set({ 
+            transaction_id: transactionId,
+            status: WebhookStatus.PROCESSING,
+            error_message: undefined
+          })
+          .where('webhook_id IN (:...webhookIds)', {
+            webhookIds: orphanedWebhooks.map(w => w.webhook_id)
+          })
+          .execute();
+        
+        logger.info('Orphaned webhooks successfully linked to transaction', {
+           transactionId,
+           gatewayTransactionId,
+           webhookCount: orphanedWebhooks.length,
+           webhookIds: orphanedWebhooks.map(w => w.webhook_id),
+           eventTypes: orphanedWebhooks.map(w => {
+             try {
+               const payload = JSON.parse(w.payload);
+               return payload.event;
+             } catch {
+               return 'unknown';
+             }
+           })
+         });
+        
+        // Procesar los eventos de los webhooks ahora que están vinculados
+        for (const webhook of orphanedWebhooks) {
+          try {
+            const webhookEvent = JSON.parse(webhook.payload);
+            await this.processWebhookEvent(webhookEvent);
+            
+            // Marcar como procesado
+            await webhookRepository.update(webhook.webhook_id, {
+              status: WebhookStatus.PROCESSED
+            });
+          } catch (error) {
+            logger.error('Error processing orphaned webhook', {
+              webhookId: webhook.webhook_id,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            
+            // Marcar como fallido
+            await webhookRepository.update(webhook.webhook_id, {
+              status: WebhookStatus.FAILED,
+              error_message: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('Error processing orphaned webhooks', {
+        gatewayTransactionId,
+        transactionId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Valida la estructura básica de un webhook de Wompi
+   * @param event - Evento de webhook a validar
+   * @returns true si la estructura es válida
+   */
+  private validateWompiWebhookStructure(event: any): boolean {
+    if (!event || typeof event !== 'object') {
+      logger.error('Webhook event is not a valid object');
+      return false;
+    }
+
+    if (!event.event || typeof event.event !== 'string') {
+      logger.error('Webhook missing or invalid event type', { event: event.event });
+      return false;
+    }
+
+    if (!event.data || !event.data.transaction) {
+      logger.error('Webhook missing transaction data', { 
+        hasData: !!event.data,
+        hasTransaction: !!(event.data && event.data.transaction)
+      });
+      return false;
+    }
+
+    if (!event.data.transaction.id) {
+      logger.error('Webhook transaction missing ID', {
+        transaction: event.data.transaction
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Procesa solo el evento del webhook (sin guardar)
+   * Usado para procesar webhooks huérfanos que ya fueron guardados
+   */
+  private async processWebhookEvent(webhookEvent: WompiWebhookEvent): Promise<void> {
+    if (!this.validateWompiWebhookStructure(webhookEvent)) {
+      throw new Error('Invalid webhook structure');
+    }
+
+    switch (webhookEvent.event) {
+      case WompiEventType.TRANSACTION_UPDATED:
+        await this.handleTransactionUpdated(webhookEvent.data.transaction);
+        break;
+      case WompiEventType.PAYMENT_LINK_PAID:
+        await this.handlePaymentLinkPaid(webhookEvent.data.transaction);
+        break;
+      default:
+        logger.warn('Unknown webhook event type', {
+          event: webhookEvent.event,
+          supportedEvents: Object.values(WompiEventType)
+        });
+    }
+   }
+
+   /**
+    * Limpia webhooks huérfanos que tienen más de X días sin ser vinculados
+    * Este método debe ejecutarse periódicamente para mantener la base de datos limpia
+    * 
+    * @param daysOld - Número de días después de los cuales considerar un webhook como abandonado
+    * @returns Número de webhooks eliminados
+    */
+   async cleanupOrphanedWebhooks(daysOld: number = 7): Promise<number> {
+     try {
+       const webhookRepository = AppDataSource.getRepository(PaymentWebhook);
+       
+       const cutoffDate = new Date();
+       cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+       
+       const result = await webhookRepository
+         .createQueryBuilder()
+         .delete()
+         .from(PaymentWebhook)
+         .where('transaction_id IS NULL')
+         .andWhere('received_at < :cutoffDate', { cutoffDate })
+         .execute();
+       
+       const deletedCount = result.affected || 0;
+       
+       if (deletedCount > 0) {
+         logger.info('Cleaned up orphaned webhooks', {
+           deletedCount,
+           daysOld,
+           cutoffDate: cutoffDate.toISOString()
+         });
+       }
+       
+       return deletedCount;
+     } catch (error) {
+       logger.error('Error cleaning up orphaned webhooks', {
+         error: error instanceof Error ? error.message : 'Unknown error',
+         daysOld
+       });
+       return 0;
+     }
+   }
 
   private verifyWebhookSignature(payload: any, signature: string): boolean {
     // Wompi no usa webhook secrets tradicionales

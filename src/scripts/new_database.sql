@@ -549,3 +549,25 @@ WHERE sessions_purchased = 0;
 --     AND appointments.status IN ('completed', 'confirmed', 'scheduled')
 -- )
 -- WHERE sessions_purchased = 0;
+
+
+
+-- Migration: Make transaction_id nullable in payment_webhooks table
+-- This allows webhooks to be saved even when the corresponding transaction hasn't been created yet
+-- (for cases where webhooks arrive before transactions are recorded)
+
+BEGIN;
+
+-- Make transaction_id column nullable
+ALTER TABLE payment_webhooks 
+ALTER COLUMN transaction_id DROP NOT NULL;
+
+-- Add a comment to document the change
+COMMENT ON COLUMN payment_webhooks.transaction_id IS 'Foreign key to payment_transactions. Can be null for orphaned webhooks that arrive before transaction creation.';
+
+COMMIT;
+
+-- Verify the change
+-- SELECT column_name, is_nullable, data_type 
+-- FROM information_schema.columns 
+-- WHERE table_name = 'payment_webhooks' AND column_name = 'transaction_id';

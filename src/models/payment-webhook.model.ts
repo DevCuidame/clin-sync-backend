@@ -13,8 +13,8 @@ export class PaymentWebhook {
   @PrimaryGeneratedColumn('increment')
   webhook_id!: number;
 
-  @Column()
-  transaction_id!: number;
+  @Column({ nullable: true })
+  transaction_id?: number;
 
   @Column({ length: 100 })
   provider!: string;
@@ -45,7 +45,7 @@ export class PaymentWebhook {
   error_message?: string;
 
   // Relaciones
-  @ManyToOne(() => PaymentTransaction)
+  @ManyToOne(() => PaymentTransaction, { nullable: true })
   @JoinColumn({ name: 'transaction_id' })
-  transaction!: PaymentTransaction;
+  transaction?: PaymentTransaction;
 }
