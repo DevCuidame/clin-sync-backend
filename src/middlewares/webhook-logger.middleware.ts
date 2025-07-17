@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import logger from '../utils/logger';
 
 /**
  * Middleware específico para logging detallado de webhooks
@@ -42,7 +41,7 @@ export const webhookLoggerMiddleware = (req: Request, res: Response, next: NextF
     } : null
   };
 
-  logger.info('📥 Webhook request received', requestInfo);
+  console.log('📥 Webhook request received', requestInfo);
 
   // Interceptar la respuesta para logging
   const originalSend = res.send;
@@ -50,7 +49,7 @@ export const webhookLoggerMiddleware = (req: Request, res: Response, next: NextF
     const endTime = Date.now();
     const duration = endTime - startTime;
     
-    logger.info('📤 Webhook response sent', {
+    console.log('📤 Webhook response sent', {
       statusCode: res.statusCode,
       duration: `${duration}ms`,
       responseSize: body ? body.length : 0,
@@ -71,7 +70,7 @@ export const webhookErrorMiddleware = (error: any, req: Request, res: Response, 
     return next(error);
   }
 
-  logger.error('❌ Webhook processing error', {
+  console.error('❌ Webhook processing error', {
     error: {
       message: error.message,
       name: error.name,

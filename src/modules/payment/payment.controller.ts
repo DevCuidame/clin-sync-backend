@@ -373,7 +373,7 @@ export class PaymentController {
     const eventId = req.headers['x-event-id'] as string;
     
     // Log detallado para debugging
-    logger.info('Webhook request received', {
+    console.log('Webhook request received', {
       headers: {
         'x-signature': signature ? signature.substring(0, 10) + '...' : 'missing',
         'x-timestamp': timestamp || 'missing',
@@ -392,7 +392,7 @@ export class PaymentController {
     });
     
     if (!signature) {
-      logger.warn('Webhook rejected: missing signature', {
+      console.warn('Webhook rejected: missing signature', {
         headers: req.headers,
         bodyPreview: JSON.stringify(req.body).substring(0, 200)
       });
@@ -403,14 +403,14 @@ export class PaymentController {
     }
 
     try {
-      logger.info('Processing Wompi webhook', {
+      console.log('Processing Wompi webhook', {
         event: req.body.event,
         signature: signature.substring(0, 10) + '...'
       });
 
       await this.wompiService.processWebhook(req.body, signature);
 
-      logger.info('Webhook processed successfully', {
+      console.log('Webhook processed successfully', {
         event: req.body.event,
         transactionId: req.body.data?.transaction?.id
       });
@@ -420,7 +420,7 @@ export class PaymentController {
         message: 'Webhook procesado exitosamente'
       });
     } catch (error) {
-      logger.error('Error processing webhook', {
+      console.error('Error processing webhook', {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         event: req.body?.event,
