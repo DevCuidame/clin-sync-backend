@@ -381,6 +381,21 @@ export class WompiWebhookDto {
   @IsOptional()
   @IsString({ message: 'La versión debe ser una cadena' })
   api_version?: string;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'El timestamp debe ser un número' })
+  timestamp?: number;
+
+  @IsOptional()
+  @IsObject({ message: 'La firma debe ser un objeto' })
+  signature?: {
+    checksum: string;
+    properties: string[];
+  };
+
+  @IsOptional()
+  @IsString({ message: 'El ambiente debe ser una cadena' })
+  environment?: string;
 }
 
 /**
