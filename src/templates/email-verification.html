@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación de Correo Electrónico - Esencia y Cuerpo</title>
+    <style>
+        :root {
+            --color-primary: #8DD4AA;
+            --color-secondary: #0E6766;
+            --color-tertiary: #FFFFFF;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: var(--color-tertiary);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%);
+            color: var(--color-tertiary);
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-tertiary);
+        }
+        
+        .header .subtitle {
+            margin: 10px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+            color: var(--color-tertiary);
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            color: var(--color-secondary);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .message {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 30px;
+            line-height: 1.7;
+        }
+        
+        .verification-button {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .btn {
+            display: inline-block;
+            background-color: var(--color-secondary);
+            color: var(--color-tertiary) !important;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            border: 2px solid var(--color-secondary);
+            transition: all 0.2s ease;
+        }
+        
+        .btn:hover {
+            background-color: transparent;
+            color: var(--color-secondary) !important;
+            border: 2px solid var(--color-secondary);
+        }
+        
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid var(--color-primary);
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .info-box h3 {
+            color: var(--color-secondary);
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .info-box p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .alternative-link {
+            background-color: #f1f3f4;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--color-secondary);
+        }
+        
+        .footer {
+            background-color: #f8f9fa;
+            padding: 25px 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .footer p {
+            margin: 5px 0;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        
+        .footer .company-name {
+            color: var(--color-secondary);
+            font-weight: 600;
+        }
+        
+        .security-notice {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .security-notice h4 {
+            color: #856404;
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .security-notice p {
+            color: #856404;
+            margin: 0;
+            font-size: 13px;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+            
+            .content {
+                padding: 25px 20px;
+            }
+            
+            .header {
+                padding: 25px 20px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌿 Esencia y Cuerpo</h1>
+            <p class="subtitle">Verificación de Correo Electrónico</p>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                ¡Hola {{userName}}! 👋
+            </div>
+            
+            <div class="message">
+                <p>¡Bienvenido/a a <strong>Esencia y Cuerpo</strong>! Estamos emocionados de tenerte como parte de nuestra comunidad de bienestar y relajación.</p>
+                
+                <p>Para completar tu registro y comenzar a disfrutar de todos nuestros servicios de spa y bienestar, necesitamos verificar tu dirección de correo electrónico.</p>
+            </div>
+            
+            <div class="verification-button">
+                <a href="{{verificationUrl}}" class="btn">
+                    ✅ Verificar mi correo electrónico
+                </a>
+            </div>
+            
+            <div class="info-box">
+                <h3>✨ ¿Qué puedes hacer después de verificar?</h3>
+                <p>• Acceder a tu panel de control personalizado<br>
+                • Reservar tratamientos de spa y masajes<br>
+                • Gestionar tu historial de servicios<br>
+                • Recibir ofertas especiales y promociones</p>
+            </div>
+            
+            <div class="security-notice">
+                <h4>🔒 Aviso de Seguridad</h4>
+                <p>Este enlace de verificación expirará en <strong>{{expirationTime}}</strong>. Si no solicitaste esta cuenta, puedes ignorar este correo de forma segura.</p>
+            </div>
+            
+            <div class="message">
+                <p><strong>¿Problemas con el botón?</strong> Copia y pega el siguiente enlace en tu navegador:</p>
+            </div>
+            
+            <div class="alternative-link">
+                {{verificationUrl}}
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p class="company-name">Esencia y Cuerpo</p>
+            <p>Tu Spa de Bienestar y Relajación</p>
+            <p>Este correo fue enviado automáticamente, por favor no respondas a esta dirección.</p>
+            <p style="margin-top: 15px; font-size: 12px;">© 2024 Esencia y Cuerpo. Todos los derechos reservados.</p>
+        </div>
+    </div>
+</body>
+</html>

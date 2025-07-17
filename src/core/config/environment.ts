@@ -78,7 +78,7 @@ const config: Config = {
     port: parseInt(process.env.PORT || '3000', 10),
     host: process.env.HOST || 'localhost',
     apiPrefix: process.env.API_PREFIX || '/api',
-    production_url: process.env.PRODUCTION_URL || 'health.cuidame.tech'
+    production_url: process.env.WEBSITE_PRODUCTION_URL || 'esenciaycuerpo.cuidame.tech'
   },
   database: {
     host: process.env.DB_HOST || 'localhost',

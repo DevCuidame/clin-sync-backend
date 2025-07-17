@@ -360,7 +360,79 @@ export class AuthService {
       }
     }
 
-    // TODO: Enviar email de verificación (implementar en un servicio de email)
+    // Generar token de verificación
+    const verificationToken = jwt.sign(
+      { id: newUser.id, email: newUser.email },
+      config.jwt.secret,
+      { expiresIn: '24h' }
+    );
+
+    // Actualizar token en la base de datos
+    await this.userRepository.updateSessionToken(newUser.id, verificationToken);
+
+    // Construir la URL de verificación
+    const verificationUrl = `${config.server.production_url}/verify-email?token=${verificationToken}`;
+
+    // Enviar email de verificación
+    try {
+      let emailHtml = '';
+      let emailSubject = 'Verificación de correo electrónico - Esencia y Cuerpo';
+
+      try {
+        // Intentar obtener la plantilla desde archivo
+        emailHtml = await this.templateFileService.renderTemplate(
+          'email-verification',
+          {
+            userName: newUser.first_name,
+            verificationUrl: verificationUrl,
+            expirationTime: '24 horas',
+          }
+        );
+      } catch (templateError) {
+        // Si no se puede leer la plantilla desde archivo, usar plantilla por defecto
+        logger.warn(
+          'No se pudo leer la plantilla de verificación desde archivo, usando plantilla por defecto'
+        );
+        emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #FFFFFF; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <div style="background: linear-gradient(135deg, #0E6766 0%, #8DD4AA 100%); color: #FFFFFF; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="margin: 0; font-size: 28px; color: #FFFFFF;">🏥 Esencia y Cuerpo</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px; color: #FFFFFF;">Verificación de Correo Electrónico</p>
+            </div>
+            <div style="padding: 40px 30px;">
+              <div style="font-size: 18px; color: #0E6766; margin-bottom: 20px; font-weight: 600;">
+                ¡Hola ${newUser.first_name}! 👋
+              </div>
+              <p style="font-size: 16px; color: #555; margin-bottom: 30px; line-height: 1.7;">¡Bienvenido/a a <strong>Esencia y Cuerpo</strong>! Para completar tu registro, por favor verifica tu correo electrónico haciendo clic en el siguiente botón:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${verificationUrl}" style="display: inline-block; background: linear-gradient(135deg, #8DD4AA 0%, #0E6766 100%); color: #FFFFFF !important; padding: 15px 30px; text-decoration: none; border-radius: 25px; font-weight: 600; font-size: 16px;">✅ Verificar mi correo electrónico</a>
+              </div>
+              <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                <h4 style="color: #856404; margin: 0 0 8px 0; font-size: 14px;">🔒 Aviso de Seguridad</h4>
+                <p style="color: #856404; margin: 0; font-size: 13px;">Este enlace expirará en 24 horas. Si no solicitaste esta cuenta, puedes ignorar este correo.</p>
+              </div>
+              <p style="font-size: 14px; color: #666;">Si tienes problemas con el botón, copia y pega este enlace en tu navegador: ${verificationUrl}</p>
+            </div>
+            <div style="background-color: #f8f9fa; padding: 25px 30px; text-align: center; border-top: 1px solid #e9ecef; border-radius: 0 0 10px 10px;">
+              <p style="margin: 5px 0; color: #0E6766; font-weight: 600;">Esencia y Cuerpo</p>
+              <p style="margin: 5px 0; color: #6c757d; font-size: 14px;">Sistema de Gestión Clínica Digital</p>
+            </div>
+          </div>
+        `;
+      }
+
+      // Enviar el correo
+      await this.emailService.sendEmail({
+        to: newUser.email,
+        subject: emailSubject,
+        html: emailHtml,
+      });
+
+      logger.info(`Email de verificación enviado a ${newUser.email}`);
+    } catch (error) {
+      logger.error('Error al enviar email de verificación:', error);
+      // No fallamos el registro si hay error en el email, pero lo registramos
+    }
 
     return {
       success: true,
@@ -403,7 +475,7 @@ export class AuthService {
     await this.userRepository.updateSessionToken(user.id, resetToken);
 
     // Construir la URL de restablecimiento
-    const resetUrl = `https://${config.server.production_url}/reset-password?token=${resetToken}`;
+    const resetUrl = `${config.server.production_url}/reset-password?token=${resetToken}`;
 
     // Enviar email con instrucciones
     try {
