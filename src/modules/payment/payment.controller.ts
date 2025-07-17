@@ -369,25 +369,65 @@ export class PaymentController {
    */
   handleWebhook = catchAsync(async (req: Request, res: Response) => {
     const signature = req.headers['x-signature'] as string;
+    const timestamp = req.headers['x-timestamp'] as string;
+    const eventId = req.headers['x-event-id'] as string;
+    
+    // Log detallado para debugging
+    logger.info('Webhook request received', {
+      headers: {
+        'x-signature': signature ? signature.substring(0, 10) + '...' : 'missing',
+        'x-timestamp': timestamp || 'missing',
+        'x-event-id': eventId || 'missing',
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']
+      },
+      body: {
+        event: req.body?.event,
+        timestamp: req.body?.timestamp,
+        environment: req.body?.environment,
+        hasData: !!req.body?.data,
+        hasSignature: !!req.body?.signature
+      },
+      bodySize: JSON.stringify(req.body).length
+    });
     
     if (!signature) {
+      logger.warn('Webhook rejected: missing signature', {
+        headers: req.headers,
+        bodyPreview: JSON.stringify(req.body).substring(0, 200)
+      });
       return res.status(400).json({
         success: false,
         message: 'Firma del webhook requerida'
       });
     }
 
-    logger.info('Processing Wompi webhook', {
-      event: req.body.event,
-      signature: signature.substring(0, 10) + '...'
-    });
+    try {
+      logger.info('Processing Wompi webhook', {
+        event: req.body.event,
+        signature: signature.substring(0, 10) + '...'
+      });
 
-    await this.wompiService.processWebhook(req.body, signature);
+      await this.wompiService.processWebhook(req.body, signature);
 
-    res.status(200).json({
-      success: true,
-      message: 'Webhook procesado exitosamente'
-    });
+      logger.info('Webhook processed successfully', {
+        event: req.body.event,
+        transactionId: req.body.data?.transaction?.id
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Webhook procesado exitosamente'
+      });
+    } catch (error) {
+      logger.error('Error processing webhook', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        event: req.body?.event,
+        signature: signature ? signature.substring(0, 10) + '...' : 'missing'
+      });
+      throw error;
+    }
   });
 
   /**
