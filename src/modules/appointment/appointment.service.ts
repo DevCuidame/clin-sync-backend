@@ -10,6 +10,7 @@ import { Service } from '../../models/service.model';
 import { UserSession, UserSessionStatus } from '../../models/user-session.model';
 import logger from '../../utils/logger';
 import { createLocalDate } from '../../utils/date-format';
+import { UserSessionUtil } from '../../utils/user-session.util';
 
 export class AppointmentService {
   private appointmentRepository: Repository<Appointment>;
@@ -56,6 +57,42 @@ export class AppointmentService {
       if (conflictingAppointment) {
         throw new BadRequestError('Professional is not available at the requested time');
       }
+
+      // Validar sesión de usuario (ahora obligatoria)
+      const userSession = await this.userSessionRepository.findOne({
+        where: { user_session_id: data.user_session_id },
+        relations: ['service', 'purchase']
+      });
+
+      if (!userSession) {
+        throw new BadRequestError('Sesión de usuario no encontrada');
+      }
+
+      // Verificar que la sesión pertenece al usuario correcto
+      if (userSession.purchase.user_id !== data.user_id) {
+        throw new BadRequestError('La sesión no pertenece al usuario especificado');
+      }
+
+      // Verificar que el servicio de la sesión coincide con el servicio de la cita
+      if (userSession.service_id !== data.service_id) {
+        throw new BadRequestError('El servicio de la sesión no coincide con el servicio de la cita');
+      }
+
+      // Usar la utilidad para validar el uso de la sesión
+      const validation = UserSessionUtil.validateSessionUsage(userSession, 1);
+      if (!validation.isValid) {
+        throw new BadRequestError(`Error de validación de sesión: ${validation.reason}`);
+      }
+
+      // Decrementar las sesiones disponibles
+      userSession.sessions_remaining -= 1;
+      
+      // Si no quedan sesiones, marcar como agotada
+      if (userSession.sessions_remaining <= 0) {
+        userSession.status = UserSessionStatus.EXHAUSTED;
+      }
+      
+      await this.userSessionRepository.save(userSession);
 
       const appointment = this.appointmentRepository.create({
         ...data,
@@ -223,6 +260,25 @@ export class AppointmentService {
 
       if (appointment.status === AppointmentStatus.COMPLETED) {
         throw new BadRequestError('Cannot cancel a completed appointment');
+      }
+
+      // Restaurar sesión si la cita tenía una sesión asociada
+      if (appointment.user_session_id) {
+        const userSession = await this.userSessionRepository.findOne({
+          where: { user_session_id: appointment.user_session_id }
+        });
+
+        if (userSession) {
+          // Incrementar las sesiones disponibles
+          userSession.sessions_remaining += 1;
+          
+          // Si la sesión estaba agotada, cambiar el estado a activo
+          if (userSession.status === UserSessionStatus.EXHAUSTED) {
+            userSession.status = UserSessionStatus.ACTIVE;
+          }
+          
+          await this.userSessionRepository.save(userSession);
+        }
       }
 
       await this.appointmentRepository.update(appointmentId, {

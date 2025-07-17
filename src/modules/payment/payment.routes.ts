@@ -23,6 +23,7 @@ import {
   PaymentHistoryFiltersDto,
   TransactionIdParamDto,
   WompiWebhookDto,
+  CreatePurchaseWithTransactionDto,
 } from './dto/payment.dto';
 
 const router = Router();
@@ -76,6 +77,21 @@ router.post(
   validateBodySize(10 * 1024),
   validateDto(CreateTransactionDto),
   getPaymentController().createTransaction
+);
+
+/**
+ * @route POST /api/payments/purchase-with-transaction
+ * @desc Crear una compra y transacción en un solo paso
+ * @access Private (Usuario autenticado)
+ */
+router.post(
+  '/purchase-with-transaction',
+  authMiddleware,
+  paymentRateLimit,
+  validateContentType(['application/json']),
+  validateBodySize(10 * 1024),
+  validateDto(CreatePurchaseWithTransactionDto),
+  getPaymentController().createPurchaseWithTransaction
 );
 
 /**

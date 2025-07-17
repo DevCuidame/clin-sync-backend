@@ -145,6 +145,54 @@ export class CreateTransactionDto {
 }
 
 /**
+ * DTO para crear una compra con transacción en formato Wompi
+ */
+export class CreatePurchaseWithTransactionDto {
+  @IsInt({ message: 'El monto en centavos debe ser un número entero' })
+  @IsPositive({ message: 'El monto en centavos debe ser positivo' })
+  @Min(100000, { message: 'El monto mínimo es $1,000 COP (100000 centavos)' })
+  @Max(5000000000, { message: 'El monto máximo es $50,000,000 COP (5000000000 centavos)' })
+  amount_in_cents!: number;
+
+  @IsEnum(WompiCurrency, { message: 'Moneda no soportada' })
+  currency!: WompiCurrency;
+
+  @IsEmail({}, { message: 'Email del cliente inválido' })
+  customer_email!: string;
+
+  @IsObject({ message: 'El método de pago debe ser un objeto' })
+  payment_method!: {
+    type: WompiPaymentMethod;
+    installments?: number;
+    token?: string;
+  };
+
+  @IsString({ message: 'La referencia debe ser una cadena' })
+  @IsNotEmpty({ message: 'La referencia es obligatoria' })
+  reference!: string;
+
+  @IsObject({ message: 'Los datos del cliente deben ser un objeto' })
+  customer_data!: {
+    phone_number: string;
+    full_name: string;
+  };
+
+  @IsString({ message: 'El token de aceptación debe ser una cadena' })
+  acceptance_token?: string;
+
+  @IsString({ message: 'El token de autorización de datos personales debe ser una cadena' })
+  accept_personal_auth?: string;
+
+  @IsOptional()
+  @IsString({ message: 'La URL de redirección debe ser una cadena' })
+  redirect_url?: string;
+
+  @IsOptional()
+  @IsObject({ message: 'Los metadatos deben ser un objeto' })
+  metadata?: Record<string, any>;
+}
+
+/**
  * DTO para crear un enlace de pago
  */
 export class CreatePaymentLinkDto {

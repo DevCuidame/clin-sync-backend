@@ -571,3 +571,46 @@ COMMIT;
 -- SELECT column_name, is_nullable, data_type 
 -- FROM information_schema.columns 
 -- WHERE table_name = 'payment_webhooks' AND column_name = 'transaction_id';
+
+
+
+-- Migration: Add reference field to purchases table
+-- Date: 2024
+-- Description: Adds a reference field to the purchases table for tracking purchase references
+
+ALTER TABLE purchases 
+ADD COLUMN reference VARCHAR(255);
+
+-- Add index for better query performance on reference field
+CREATE INDEX idx_purchases_reference ON purchases(reference);
+
+-- Update existing records with generated references
+UPDATE purchases 
+SET reference = CASE 
+    WHEN purchase_type = 'package' AND package_id IS NOT NULL THEN 
+        'PACKAGE-' || package_id || '-' || EXTRACT(EPOCH FROM purchase_date)::bigint || '-' || substr(md5(random()::text), 1, 9)
+    WHEN purchase_type = 'service' AND service_id IS NOT NULL THEN 
+        'SERVICE-' || service_id || '-' || EXTRACT(EPOCH FROM purchase_date)::bigint || '-' || substr(md5(random()::text), 1, 9)
+    ELSE 
+        'PURCHASE-' || purchase_id || '-' || EXTRACT(EPOCH FROM purchase_date)::bigint || '-' || substr(md5(random()::text), 1, 9)
+END
+WHERE reference IS NULL;
+
+-- Verify the migration
+SELECT 
+    COUNT(*) as total_purchases,
+    COUNT(reference) as purchases_with_reference,
+    COUNT(*) - COUNT(reference) as purchases_without_reference
+FROM purchases;
+
+-- Show sample of updated records
+SELECT 
+    purchase_id,
+    purchase_type,
+    package_id,
+    service_id,
+    reference,
+    purchase_date
+FROM purchases 
+ORDER BY purchase_id 
+LIMIT 10;

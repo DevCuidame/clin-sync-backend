@@ -54,6 +54,9 @@ export class Purchase {
   @Column({ length: 255, nullable: true })
   transaction_id?: string;
 
+  @Column({ length: 255, nullable: true })
+  reference?: string;
+
   @CreateDateColumn()
   purchase_date!: Date;
 

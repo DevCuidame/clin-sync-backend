@@ -143,6 +143,7 @@ export interface WompiTransactionResponse {
   paymentMethodType?: string;
   taxes?: any[];
   shippingAddress?: WompiShippingAddress;
+  data?: any
 }
 
 export interface WompiPaymentLinkResponse {

@@ -45,6 +45,7 @@ export interface PurchaseResponseDto {
   payment_status: PaymentStatus;
   payment_method: string;
   transaction_id?: string;
+  reference?: string;
   purchase_date: Date;
   expires_at: Date;
   payment_details?: any;

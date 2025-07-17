@@ -15,6 +15,7 @@ import {
   ConfirmTransactionDto,
   CreateRefundDto,
   PaymentHistoryFiltersDto,
+  CreatePurchaseWithTransactionDto,
 } from './dto/payment.dto';
 import { WompiTransactionStatus, WompiCurrency, WompiPaymentMethod, CreateWompiTransactionDto, CreateWompiServiceTransactionDto, CreatePaymentLinkDto as WompiPaymentLinkDto, ConfirmTransactionDto as WompiConfirmTransactionDto, RefundTransactionDto as WompiRefundTransactionDto, PaymentHistoryFilterDto as WompiPaymentHistoryFilterDto, WompiWebhookEvent } from './payment.interface';
 import {
@@ -49,6 +50,7 @@ export class PaymentController {
     this.getAcceptanceTokens = this.getAcceptanceTokens.bind(this);
     this.createServiceTransaction = this.createServiceTransaction.bind(this);
     this.createServicePaymentLink = this.createServicePaymentLink.bind(this);
+    this.createPurchaseWithTransaction = this.createPurchaseWithTransaction.bind(this);
   }
 
 
@@ -186,6 +188,73 @@ export class PaymentController {
           message: error.message || 'Error de validación en los datos de la transacción',
           validationErrors: error.validationErrors || {},
           error: 'VALIDATION_ERROR'
+        });
+        return;
+      }
+      
+      next(error);
+    }
+  }
+
+  /**
+   * Crea una compra con transacción en un solo paso
+   */
+  async createPurchaseWithTransaction(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const purchaseData: CreatePurchaseWithTransactionDto = req.body;
+    const userId = (req as any).user?.id;
+
+    try {
+      if (!userId) {
+        throw new BadRequestError('Usuario no autenticado');
+      }
+
+      // Extraer packageId de los metadatos
+      const packageId = purchaseData.metadata?.itemId;
+      if (!packageId) {
+        throw new BadRequestError('ID del paquete no encontrado en los metadatos');
+      }
+
+
+
+      // Transform DTO to match service interface
+      const purchaseTransactionData = {
+        userId,
+        packageId,
+        amountInCents: purchaseData.amount_in_cents,
+        currency: purchaseData.currency,
+        customerInfo: {
+          email: purchaseData.customer_email,
+          fullName: purchaseData.customer_data.full_name,
+          phoneNumber: purchaseData.customer_data.phone_number
+        },
+        paymentMethod: purchaseData.payment_method,
+        reference: purchaseData.reference,
+        metadata: purchaseData.metadata,
+        acceptanceToken: purchaseData.acceptance_token,
+        acceptPersonalAuth: purchaseData.accept_personal_auth,
+        redirectUrl: purchaseData.redirect_url
+      };
+
+      const result = await this.wompiService.createPurchaseWithTransaction(purchaseTransactionData);
+
+
+
+      res.status(201).json({
+        success: true,
+        message: 'Compra y transacción creadas exitosamente',
+        data: result
+      });
+    } catch (error: any) {
+
+      
+      // If service returns a validation error, send with status 422
+      if (error.response?.status === 422 || (error.message && error.message.includes('validación'))) {
+        res.status(422).json({
+          success: false,
+          message: error.message,
+          error: error.message,
+          validationErrors: error.validationErrors || {},
+          errorType: 'VALIDATION_ERROR'
         });
         return;
       }

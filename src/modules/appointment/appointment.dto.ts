@@ -14,9 +14,9 @@ export class CreateAppointmentDto {
   @IsNotEmpty()
   service_id!: number;
 
-  @IsOptional()
   @IsNumber()
-  user_session_id?: number;
+  @IsNotEmpty()
+  user_session_id!: number;
 
   @IsDateString()
   @IsNotEmpty()

@@ -198,7 +198,6 @@ export class AppointmentController {
         return;
       }
 
-      console.log("🚀 ~ AppointmentController ~ cancelAppointment ~ req.body:", req.body)
       const dto = plainToClass(CancelAppointmentDto, req.body);
       const errors = await validate(dto);
 

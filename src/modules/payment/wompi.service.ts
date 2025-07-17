@@ -63,15 +63,9 @@ export class WompiService {
     // Interceptor para logging de requests
     this.axiosInstance.interceptors.request.use(
       (config) => {
-        logger.info('Wompi API Request', {
-          method: config.method,
-          url: config.url,
-          data: config.data ? JSON.stringify(config.data) : undefined
-        });
         return config;
       },
       (error) => {
-        logger.error('Wompi API Request Error', error);
         return Promise.reject(error);
       }
     );
@@ -79,11 +73,6 @@ export class WompiService {
     // Interceptor para logging de responses
     this.axiosInstance.interceptors.response.use(
       (response) => {
-        logger.info('Wompi API Response', {
-          url: response.config.url,
-          status: response.status,
-          data: response.data
-        });
         return response;
       },
       (error) => {
@@ -93,17 +82,6 @@ export class WompiService {
           data: error.response?.data,
           message: error.message
         };
-        
-        // Log específico para errores 422 de validación
-        if (error.response?.status === 422) {
-          logger.warn('Wompi API Validation Error (422)', {
-            ...errorDetails,
-            validationErrors: error.response?.data?.error?.messages,
-            errorType: error.response?.data?.error?.type
-          });
-        } else {
-          logger.error('Wompi API Error', errorDetails);
-        }
         
         return Promise.reject(error);
       }
@@ -167,17 +145,11 @@ export class WompiService {
       };
 
     } catch (error: any) {
-      logger.error('Error creating Wompi transaction', {
-        error: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
+
       
       // Si es error 422 (validación), intentar una vez más con nueva referencia
       if (error.response?.status === 422 && !isRetry) {
-        logger.warn('Retrying transaction with new reference due to 422 error', {
-          originalReference: transactionData.reference
-        });
+
         
         // Generar nueva referencia única
         const newReference = `TXN-${Date.now()}-${dto.userId}-${Math.random().toString(36).substr(2, 9)}`;
@@ -207,10 +179,7 @@ export class WompiService {
              message: 'Transacción creada exitosamente (reintento)'
            };
         } catch (retryError: any) {
-          logger.error('Retry also failed', {
-            error: retryError.message,
-            response: retryError.response?.data
-          });
+
           return this.handleWompiError(retryError);
         }
       }
@@ -279,7 +248,7 @@ export class WompiService {
       };
 
     } catch (error) {
-      logger.error('Error creating Wompi payment link', error);
+
       return this.handleWompiError(error);
     }
   }
@@ -312,7 +281,7 @@ export class WompiService {
       };
 
     } catch (error) {
-      logger.error('Error confirming Wompi transaction', error);
+
       return this.handleWompiError(error);
     }
   }
@@ -325,9 +294,15 @@ export class WompiService {
       const response: AxiosResponse<WompiTransactionResponse> = await this.axiosInstance.get(
         `/transactions/${transactionId}`
       );
+      
+      // Si la transacción está aprobada, actualizar la compra correspondiente
+      if (response.data.data.status === 'APPROVED') {
+        await this.updatePurchaseFromTransaction(response.data.data);
+      }
+      
       return response.data;
     } catch (error) {
-      logger.error('Error getting Wompi transaction status', error);
+
       throw error;
     }
   }
@@ -356,11 +331,11 @@ export class WompiService {
           await this.handlePaymentLinkPaid(webhookEvent.data.transaction);
           break;
         default:
-          logger.warn('Unknown webhook event type', { event: webhookEvent.event });
+  
       }
 
     } catch (error) {
-      logger.error('Error processing Wompi webhook', error);
+
       throw error;
     }
   }
@@ -389,7 +364,7 @@ export class WompiService {
       };
 
     } catch (error) {
-      logger.error('Error creating Wompi refund', error);
+
       return {
         success: false,
         transactionId: dto.transactionId,
@@ -398,6 +373,96 @@ export class WompiService {
         message: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
+  }
+
+  /**
+   * Crea una compra con transacción en un solo paso
+   */
+  async createPurchaseWithTransaction(dto: any): Promise<PaymentResponseDto> {
+    const userRepository = AppDataSource.getRepository(User);
+    const packageRepository = AppDataSource.getRepository(Package);
+    const serviceRepository = AppDataSource.getRepository(Service);
+    const purchaseRepository = AppDataSource.getRepository(Purchase);
+    
+    // Verificar que el usuario existe
+    const user = await userRepository.findOne({ where: { id: dto.userId } });
+    if (!user) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Determinar el tipo de item desde los metadatos
+    const itemType = dto.metadata?.itemType;
+    const itemId = dto.metadata?.itemId || dto.packageId;
+    
+    let purchase: Purchase;
+    let expiresAt = new Date();
+
+    if (itemType === 'service') {
+      // Compra de servicio
+      const serviceEntity = await serviceRepository.findOne({ where: { service_id: itemId } });
+      if (!serviceEntity) {
+        throw new Error('Servicio no encontrado');
+      }
+
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30 días por defecto para servicios
+
+      purchase = purchaseRepository.create({
+        user,
+        service: serviceEntity,
+        service_id: itemId,
+        purchase_type: 'service',
+        amount_paid: dto.amountInCents / 100,
+        payment_status: PaymentStatus.PENDING,
+        payment_method: dto.paymentMethod.type,
+        expires_at: expiresAt,
+        reference: dto.reference || `SERVICE-${itemId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        payment_details: {
+          customer_info: dto.customerInfo,
+          metadata: dto.metadata
+        }
+      });
+    } else {
+      // Compra de paquete (por defecto)
+      const packageEntity = await packageRepository.findOne({ where: { package_id: itemId } });
+      if (!packageEntity) {
+        throw new Error('Paquete no encontrado');
+      }
+
+      expiresAt.setDate(expiresAt.getDate() + packageEntity.validity_days);
+
+      purchase = purchaseRepository.create({
+        user,
+        package: packageEntity,
+        package_id: itemId,
+        purchase_type: 'package',
+        amount_paid: dto.amountInCents / 100,
+        payment_status: PaymentStatus.PENDING,
+        payment_method: dto.paymentMethod.type,
+        expires_at: expiresAt,
+        reference: dto.reference || `PACKAGE-${itemId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        payment_details: {
+          customer_info: dto.customerInfo,
+          metadata: dto.metadata
+        }
+      });
+    }
+
+    const savedPurchase = await purchaseRepository.save(purchase);
+
+    // Solo guardar en base de datos, sin crear transacción en Wompi
+
+
+    return {
+      success: true,
+      transactionId: undefined, // No hay transacción de Wompi
+      status: WompiTransactionStatus.PENDING, // Estado pendiente por defecto
+      amountInCents: dto.amountInCents,
+      amount: dto.amountInCents / 100,
+      currency: dto.currency,
+      reference: dto.reference || `PURCHASE-${savedPurchase.purchase_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      redirectUrl: dto.redirectUrl || 'http://localhost:4200/home/payments/callback',
+      purchaseId: savedPurchase.purchase_id
+    };
   }
 
   /**
@@ -454,7 +519,8 @@ export class WompiService {
         amount_paid: dto.amountInCents / 100,
         payment_status: PaymentStatus.PENDING,
         payment_method: dto.paymentMethod,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        reference: dto.reference || `PURCHASE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       });
     } else if (dto.serviceId) {
       // Compra de servicio
@@ -474,7 +540,8 @@ export class WompiService {
         amount_paid: dto.amountInCents / 100,
         payment_status: PaymentStatus.PENDING,
         payment_method: dto.paymentMethod,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        reference: dto.reference || `PURCHASE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       });
     } else {
       throw new Error('Debe especificar packageId o serviceId');
@@ -542,12 +609,7 @@ export class WompiService {
       }
     }
     
-    logger.info('Transaction updated via webhook', {
-      transactionId: transaction.id,
-      status: transaction.status,
-      purchaseId: transaction.status === WompiTransactionStatus.APPROVED ? 
-        (await this.getPurchaseByTransactionId(transaction.id))?.purchase_id : undefined
-    });
+
   }
 
   private async handlePaymentLinkPaid(transaction: WompiTransactionResponse): Promise<void> {
@@ -559,21 +621,12 @@ export class WompiService {
       await this.createSessionsForPurchase(purchase);
     }
     
-    logger.info('Payment link paid via webhook', {
-      transactionId: transaction.id,
-      paymentLinkId: transaction.paymentLinkId,
-      purchaseId: purchase?.purchase_id
-    });
+
   }
 
   private async saveWebhookEvent(event: WompiWebhookEvent): Promise<void> {
     // Validar estructura del webhook antes de procesarlo
     if (!this.validateWompiWebhookStructure(event)) {
-      logger.error('Invalid webhook structure received', {
-        event: event?.event,
-        hasData: !!(event?.data),
-        hasTransaction: !!(event?.data?.transaction)
-      });
       return;
     }
 
@@ -590,11 +643,6 @@ export class WompiService {
     });
     
     if (!paymentTransaction) {
-      logger.warn('Payment transaction not found for webhook - this might be a new purchase', {
-        gatewayTransactionId,
-        event: event.event
-      });
-      
       // Para compras nuevas, crear un webhook sin transaction_id y marcarlo como pendiente
       // Esto permite procesar el webhook aunque la transacción no esté en nuestra BD aún
       const webhook = webhookRepository.create({
@@ -610,16 +658,6 @@ export class WompiService {
       
       await webhookRepository.save(webhook);
       
-      logger.info('Webhook saved as orphaned - transaction not found (likely new purchase)', {
-        webhookId: webhook.webhook_id,
-        gatewayTransactionId,
-        eventType: event.event,
-        customerEmail: event.data.transaction?.customerEmail,
-        amount: event.data.transaction?.amountInCents,
-        status: event.data.transaction?.status,
-        note: 'This webhook will be processed when the corresponding transaction is created'
-      });
-      
       return; // Salir sin procesar el evento
     }
     
@@ -634,13 +672,6 @@ export class WompiService {
     });
 
     await webhookRepository.save(webhook);
-    
-    logger.info('Webhook event saved successfully', {
-      webhookId: webhook.webhook_id,
-      transactionId: paymentTransaction.transaction_id,
-      gatewayTransactionId,
-      eventType: event.event
-    });
   }
 
   /**
@@ -684,20 +715,7 @@ export class WompiService {
           })
           .execute();
         
-        logger.info('Orphaned webhooks successfully linked to transaction', {
-           transactionId,
-           gatewayTransactionId,
-           webhookCount: orphanedWebhooks.length,
-           webhookIds: orphanedWebhooks.map(w => w.webhook_id),
-           eventTypes: orphanedWebhooks.map(w => {
-             try {
-               const payload = JSON.parse(w.payload);
-               return payload.event;
-             } catch {
-               return 'unknown';
-             }
-           })
-         });
+
         
         // Procesar los eventos de los webhooks ahora que están vinculados
         for (const webhook of orphanedWebhooks) {
@@ -710,10 +728,7 @@ export class WompiService {
               status: WebhookStatus.PROCESSED
             });
           } catch (error) {
-            logger.error('Error processing orphaned webhook', {
-              webhookId: webhook.webhook_id,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
+
             
             // Marcar como fallido
             await webhookRepository.update(webhook.webhook_id, {
@@ -724,11 +739,7 @@ export class WompiService {
         }
       }
     } catch (error) {
-      logger.error('Error processing orphaned webhooks', {
-        gatewayTransactionId,
-        transactionId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+
     }
   }
 
@@ -739,27 +750,22 @@ export class WompiService {
    */
   private validateWompiWebhookStructure(event: any): boolean {
     if (!event || typeof event !== 'object') {
-      logger.error('Webhook event is not a valid object');
+
       return false;
     }
 
     if (!event.event || typeof event.event !== 'string') {
-      logger.error('Webhook missing or invalid event type', { event: event.event });
+
       return false;
     }
 
     if (!event.data || !event.data.transaction) {
-      logger.error('Webhook missing transaction data', { 
-        hasData: !!event.data,
-        hasTransaction: !!(event.data && event.data.transaction)
-      });
+
       return false;
     }
 
     if (!event.data.transaction.id) {
-      logger.error('Webhook transaction missing ID', {
-        transaction: event.data.transaction
-      });
+
       return false;
     }
 
@@ -783,10 +789,7 @@ export class WompiService {
         await this.handlePaymentLinkPaid(webhookEvent.data.transaction);
         break;
       default:
-        logger.warn('Unknown webhook event type', {
-          event: webhookEvent.event,
-          supportedEvents: Object.values(WompiEventType)
-        });
+
     }
    }
 
@@ -815,19 +818,12 @@ export class WompiService {
        const deletedCount = result.affected || 0;
        
        if (deletedCount > 0) {
-         logger.info('Cleaned up orphaned webhooks', {
-           deletedCount,
-           daysOld,
-           cutoffDate: cutoffDate.toISOString()
-         });
+
        }
        
        return deletedCount;
      } catch (error) {
-       logger.error('Error cleaning up orphaned webhooks', {
-         error: error instanceof Error ? error.message : 'Unknown error',
-         daysOld
-       });
+
        return 0;
      }
    }
@@ -836,7 +832,7 @@ export class WompiService {
     // Wompi no usa webhook secrets tradicionales
     // La verificación se hace con el checksum del evento
     if (!signature) {
-      logger.warn('No signature provided for webhook verification');
+
       return false;
     }
 
@@ -850,14 +846,10 @@ export class WompiService {
       
       // Si no hay checksum en el payload, aceptar el webhook
       // (para compatibilidad con diferentes tipos de eventos de Wompi)
-      logger.info('Webhook verification: No checksum in payload, accepting webhook', {
-        event: payload.event,
-        hasSignatureObject: !!payload.signature
-      });
       return true;
       
     } catch (error) {
-      logger.error('Error verifying webhook signature', error);
+
       return false;
     }
   }
@@ -935,6 +927,54 @@ export class WompiService {
   }
 
   /**
+   * Actualiza una compra basándose en los datos de la transacción de Wompi
+   */
+  private async updatePurchaseFromTransaction(transactionData: any): Promise<void> {
+    try {
+      const purchaseRepository = AppDataSource.getRepository(Purchase);
+      
+      // Buscar la compra por referencia
+      const purchase = await purchaseRepository.findOne({
+        where: { reference: transactionData.reference },
+        relations: ['package', 'user']
+      });
+      
+      if (!purchase) {
+
+        return;
+      }
+      
+      // Actualizar el estado de la compra, transaction_id y payment_method
+       purchase.payment_status = PaymentStatus.COMPLETED;
+       purchase.transaction_id = transactionData.id;
+       purchase.payment_method = transactionData.payment_method_type;
+      
+      // Actualizar detalles del pago con información de la transacción
+      purchase.payment_details = {
+        ...purchase.payment_details,
+        wompi_transaction: {
+          id: transactionData.id,
+          status: transactionData.status,
+          payment_method_type: transactionData.payment_method_type,
+          finalized_at: transactionData.finalized_at,
+          amount_in_cents: transactionData.amount_in_cents
+        }
+      };
+      
+      await purchaseRepository.save(purchase);
+      
+      // Crear sesiones automáticamente para la compra completada
+      await this.createSessionsForPurchase(purchase);
+      
+
+      
+    } catch (error) {
+
+      throw error;
+    }
+  }
+
+  /**
     * Crea sesiones automáticamente para una compra completada
     */
    private async createSessionsForPurchase(purchase: Purchase): Promise<void> {
@@ -948,10 +988,7 @@ export class WompiService {
        });
        
        if (existingSessions.length > 0) {
-         logger.info('Sessions already exist for purchase', {
-           purchaseId: purchase.purchase_id,
-           existingSessionsCount: existingSessions.length
-         });
+
          return;
        }
        
@@ -976,11 +1013,7 @@ export class WompiService {
            await userSessionRepository.save(session);
          }
          
-         logger.info('Sessions created automatically for package purchase', {
-           purchaseId: purchase.purchase_id,
-           packageId: purchase.package_id,
-           servicesCount: packageServices.length
-         });
+
          
        } else if (purchase.purchase_type === 'service' && purchase.service_id) {
          // Compra de servicio individual - crear una sesión para el servicio
@@ -999,25 +1032,13 @@ export class WompiService {
            await userSessionRepository.save(session);
          }
          
-         logger.info('Sessions created automatically for service purchase', {
-           purchaseId: purchase.purchase_id,
-           serviceId: purchase.service_id,
-           sessionsQuantity
-         });
+
        } else {
-         logger.warn('Purchase type not recognized or missing IDs', {
-           purchaseId: purchase.purchase_id,
-           purchaseType: purchase.purchase_type,
-           packageId: purchase.package_id,
-           serviceId: purchase.service_id
-         });
+
        }
        
      } catch (error) {
-       logger.error('Error creating sessions for purchase', {
-         purchaseId: purchase.purchase_id,
-         error: error instanceof Error ? error.message : 'Unknown error'
-       });
+
        throw error;
      }
    }

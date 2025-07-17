@@ -69,6 +69,7 @@ export class PurchaseService {
       payment_method: purchaseData.payment_method,
       transaction_id: transactionId,
       expires_at: expiresAt,
+      reference: `PACKAGE-${purchaseData.package_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       payment_details: purchaseData.payment_details
     });
 
@@ -117,6 +118,7 @@ export class PurchaseService {
       payment_method: WompiPaymentMethod.CASH,
       transaction_id: cashReference,
       expires_at: expiresAt,
+      reference: `PACKAGE-CASH-${purchaseData.package_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       payment_details: paymentDetails
     });
 
@@ -367,7 +369,8 @@ export class PurchaseService {
     const purchases = await this.purchaseRepository.find({
       where: { 
         user_id: userId,
-        purchase_type: 'service'
+        purchase_type: 'service',
+        payment_status: PaymentStatus.COMPLETED
       },
       relations: ['service', 'temporaryCustomer', 'user'],
       order: { purchase_date: 'DESC' }
@@ -573,6 +576,7 @@ export class PurchaseService {
       payment_method: purchaseData.payment_method,
       transaction_id: transactionId,
       expires_at: expiresAt,
+      reference: `SERVICE-${purchaseData.service_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       payment_details: paymentDetails
     });
 
@@ -630,6 +634,7 @@ export class PurchaseService {
       payment_method: WompiPaymentMethod.CASH,
       transaction_id: cashReference,
       expires_at: expiresAt,
+      reference: `SERVICE-CASH-${purchaseData.service_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       payment_details: paymentDetails
     });
 
@@ -748,6 +753,7 @@ export class PurchaseService {
         payment_method: purchaseData.payment_method,
         transaction_id: transactionId,
         expires_at: expiresAt,
+        reference: `SERVICE-ADMIN-${purchaseData.service_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         payment_details: {
           created_by_admin: adminUserId,
           admin_notes: purchaseData.admin_notes,
@@ -930,6 +936,7 @@ export class PurchaseService {
       payment_status: purchase.payment_status,
       payment_method: purchase.payment_method || '',
       transaction_id: purchase.transaction_id,
+      reference: purchase.reference,
       purchase_date: purchase.purchase_date,
       expires_at: purchase.expires_at,
       payment_details: purchase.payment_details,
