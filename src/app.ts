@@ -6,6 +6,7 @@ import config from './core/config/environment';
 import logger from './utils/logger';
 import { corsMiddleware } from './middlewares/cors.middleware';
 import { initializeDatabaseCleanup, shutdownDatabaseCleanup } from './modules/database-cleanup';
+import { AppointmentReminderService } from './modules/appointment/services/appointment-reminder.service';
 
 const app = express();
 
@@ -69,6 +70,10 @@ const initializeApp = async (): Promise<void> => {
     
     // Inicializar módulo de limpieza de base de datos
     initializeDatabaseCleanup();
+    
+    // Inicializar servicio de recordatorios de citas
+    new AppointmentReminderService();
+    logger.info('✅ Servicio de recordatorios de citas inicializado');
 
         
     // Debug: Mostrar rutas registradas

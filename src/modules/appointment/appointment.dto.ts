@@ -47,7 +47,11 @@ export class CreateAppointmentDto {
 
   @IsOptional()
   @IsBoolean()
-  reminder_sent?: boolean;
+  reminder_24h_sent?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  reminder_2h_sent?: boolean;
 }
 
 export class UpdateAppointmentDto {
@@ -77,7 +81,11 @@ export class UpdateAppointmentDto {
 
   @IsOptional()
   @IsBoolean()
-  reminder_sent?: boolean;
+  reminder_24h_sent?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  reminder_2h_sent?: boolean;
 }
 
 export class AppointmentQueryDto {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AppointmentController } from './appointment.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import googleCalendarRoutes from '../google-calendar/google-calendar.routes';
+import appointmentReminderRoutes from './routes/appointment-reminder.routes';
 
 const router = Router();
 const appointmentController = new AppointmentController();
@@ -30,5 +31,8 @@ router.delete('/:id', appointmentController.deleteAppointment.bind(appointmentCo
 
 // Rutas de Google Calendar (sin autenticación para callback)
 router.use('/google-calendar', googleCalendarRoutes);
+
+// Rutas de recordatorios de citas
+router.use('/reminders', appointmentReminderRoutes);
 
 export { router as appointmentRoutes };

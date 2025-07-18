@@ -103,7 +103,8 @@ export interface UserCompleteInfo {
         amount?: number;
         notes?: string;
         cancellation_reason?: string;
-        reminder_sent?: boolean;
+        reminder_24h_sent?: boolean;
+        reminder_2h_sent?: boolean;
         google_calendar_event_id?: string;
         created_at?: Date;
         updated_at?: Date;

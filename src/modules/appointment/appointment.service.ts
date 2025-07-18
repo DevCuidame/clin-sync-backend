@@ -11,6 +11,8 @@ import { UserSession, UserSessionStatus } from '../../models/user-session.model'
 import logger from '../../utils/logger';
 import { createLocalDate } from '../../utils/date-format';
 import { UserSessionUtil } from '../../utils/user-session.util';
+import { AppointmentNotificationService } from './services/appointment-notification.service';
+import { AppointmentReminderService } from './services/appointment-reminder.service';
 
 export class AppointmentService {
   private appointmentRepository: Repository<Appointment>;
@@ -19,6 +21,8 @@ export class AppointmentService {
   private serviceRepository: Repository<Service>;
   private userSessionRepository: Repository<UserSession>;
   private googleCalendarService: GoogleCalendarService | null = null;
+  private notificationService: AppointmentNotificationService;
+  private reminderService: AppointmentReminderService;
 
   constructor() {
     this.appointmentRepository = AppDataSource.getRepository(Appointment);
@@ -26,6 +30,8 @@ export class AppointmentService {
     this.professionalRepository = AppDataSource.getRepository(Professional);
     this.serviceRepository = AppDataSource.getRepository(Service);
     this.userSessionRepository = AppDataSource.getRepository(UserSession);
+    this.notificationService = new AppointmentNotificationService();
+    this.reminderService = new AppointmentReminderService();
     
     // Inicializar Google Calendar Service si las credenciales están disponibles
     try {
@@ -97,7 +103,9 @@ export class AppointmentService {
       const appointment = this.appointmentRepository.create({
         ...data,
         scheduled_at: scheduledDate,
-        status: AppointmentStatus.SCHEDULED
+        status: AppointmentStatus.SCHEDULED,
+        reminder_24h_sent: true,
+        reminder_2h_sent: true
       });
 
       const savedAppointment = await this.appointmentRepository.save(appointment);
@@ -114,6 +122,16 @@ export class AppointmentService {
           logger.error('Error creating Google Calendar event:', error);
           // No fallar la creación de la cita si Google Calendar falla
         }
+      }
+
+      // Programar recordatorios automáticos
+      try {
+        await this.reminderService.scheduleReminder(savedAppointment.appointment_id, '24h');
+        await this.reminderService.scheduleReminder(savedAppointment.appointment_id, '2h');
+        logger.info(`Reminders scheduled for appointment ${savedAppointment.appointment_id}`);
+      } catch (error) {
+        logger.error('Error scheduling reminders:', error);
+        // No fallar la creación de la cita si los recordatorios fallan
       }
 
       // Obtener la cita completa con todas las relaciones
@@ -297,6 +315,31 @@ export class AppointmentService {
         }
       }
 
+      // Cancelar recordatorios programados
+      try {
+        await this.reminderService.cancelReminders(appointmentId);
+        logger.info(`Reminders cancelled for appointment ${appointmentId}`);
+      } catch (error) {
+        logger.error('Error cancelling reminders:', error);
+      }
+
+      // Enviar notificación por correo electrónico
+      if (cancelledAppointment) {
+        try {
+          await this.notificationService.sendCancellationNotification({
+            appointment: cancelledAppointment,
+            recipientEmail: cancelledAppointment.user.email,
+            recipientName: `${cancelledAppointment.user.first_name} ${cancelledAppointment.user.last_name}`,
+            professionalName: `${cancelledAppointment.professional?.user?.first_name || ''} ${cancelledAppointment.professional?.user?.last_name || ''}`.trim(),
+            serviceName: cancelledAppointment.service?.service_name,
+            reason: data.cancellation_reason
+          });
+        } catch (error) {
+          logger.error('Error sending cancellation notification:', error);
+          // No fallar la cancelación si el envío de correo falla
+        }
+      }
+
       return cancelledAppointment;
     } catch (error) {
       if (error instanceof AppError) {
@@ -347,9 +390,41 @@ export class AppointmentService {
         scheduled_at: newScheduledDate,
         duration_minutes: data.new_duration_minutes || appointment.duration_minutes,
         notes: data.reason ? `${appointment.notes || ''} - Rescheduled: ${data.reason}` : appointment.notes,
+        reminder_24h_sent: false,
+        reminder_2h_sent: false
       });
 
-      return await this.getAppointmentById(appointmentId);
+      const rescheduledAppointment = await this.getAppointmentById(appointmentId);
+
+      // Reprogramar recordatorios para la nueva fecha
+      try {
+        await this.reminderService.cancelReminders(appointmentId);
+        await this.reminderService.scheduleReminder(appointmentId, '24h');
+        await this.reminderService.scheduleReminder(appointmentId, '2h');
+        logger.info(`Reminders rescheduled for appointment ${appointmentId}`);
+      } catch (error) {
+        logger.error('Error rescheduling reminders:', error);
+      }
+
+      // Enviar notificación por correo electrónico
+      if (rescheduledAppointment) {
+        try {
+          await this.notificationService.sendRescheduleNotification({
+            appointment: rescheduledAppointment,
+            recipientEmail: rescheduledAppointment.user.email,
+            recipientName: `${rescheduledAppointment.user.first_name} ${rescheduledAppointment.user.last_name}`,
+            professionalName: `${rescheduledAppointment.professional?.user?.first_name || ''} ${rescheduledAppointment.professional?.user?.last_name || ''}`.trim(),
+            serviceName: rescheduledAppointment.service?.service_name,
+            reason: data.reason,
+            newDateTime: newScheduledDate
+          });
+        } catch (error) {
+          logger.error('Error sending reschedule notification:', error);
+          // No fallar la reprogramación si el envío de correo falla
+        }
+      }
+
+      return rescheduledAppointment;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -373,7 +448,25 @@ export class AppointmentService {
         status: AppointmentStatus.CONFIRMED
       });
 
-      return await this.getAppointmentById(appointmentId);
+      const confirmedAppointment = await this.getAppointmentById(appointmentId);
+
+      // Enviar notificación por correo electrónico
+      if (confirmedAppointment) {
+        try {
+          await this.notificationService.sendConfirmationNotification({
+            appointment: confirmedAppointment,
+            recipientEmail: confirmedAppointment.user.email,
+            recipientName: `${confirmedAppointment.user.first_name} ${confirmedAppointment.user.last_name}`,
+            professionalName: `${confirmedAppointment.professional?.user?.first_name || ''} ${confirmedAppointment.professional?.user?.last_name || ''}`.trim(),
+            serviceName: confirmedAppointment.service?.service_name
+          });
+        } catch (error) {
+          logger.error('Error sending confirmation notification:', error);
+          // No fallar la confirmación si el envío de correo falla
+        }
+      }
+
+      return confirmedAppointment;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -422,7 +515,25 @@ export class AppointmentService {
         }
       }
 
-      return await this.getAppointmentById(appointmentId);
+      const completedAppointment = await this.getAppointmentById(appointmentId);
+
+      // Enviar notificación por correo electrónico
+      if (completedAppointment) {
+        try {
+          await this.notificationService.sendCompletionNotification({
+            appointment: completedAppointment,
+            recipientEmail: completedAppointment.user.email,
+            recipientName: `${completedAppointment.user.first_name} ${completedAppointment.user.last_name}`,
+            professionalName: `${completedAppointment.professional?.user?.first_name || ''} ${completedAppointment.professional?.user?.last_name || ''}`.trim(),
+            serviceName: completedAppointment.service?.service_name
+          });
+        } catch (error) {
+          logger.error('Error sending completion notification:', error);
+          // No fallar la finalización si el envío de correo falla
+        }
+      }
+
+      return completedAppointment;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -628,7 +739,8 @@ export class AppointmentService {
           amount: appointment.amount,
           notes: appointment.notes,
           cancellation_reason: appointment.cancellation_reason,
-          reminder_sent: appointment.reminder_sent,
+          reminder_24h_sent: appointment.reminder_24h_sent,
+          reminder_2h_sent: appointment.reminder_2h_sent,
           google_calendar_event_id: appointment.google_calendar_event_id,
           created_at: appointment.created_at,
           updated_at: appointment.updated_at

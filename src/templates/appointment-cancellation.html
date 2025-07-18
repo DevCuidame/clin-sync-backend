@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cita Cancelada</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e74c3c;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #e74c3c;
+            font-size: 24px;
+            margin: 0;
+            font-weight: 600;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .appointment-details {
+            background-color: #f8f9fa;
+            border-left: 4px solid #e74c3c;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 5px 0;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #555;
+        }
+        .detail-value {
+            color: #333;
+        }
+        .reason-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .reason-title {
+            font-weight: 600;
+            color: #856404;
+            margin-bottom: 5px;
+        }
+        .info-box {
+            background-color: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+        .contact-info {
+            margin-top: 15px;
+        }
+        .contact-link {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .contact-link:hover {
+            text-decoration: underline;
+        }
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 20px;
+            }
+            .detail-row {
+                flex-direction: column;
+            }
+            .detail-label {
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">Esencia y Cuerpo</div>
+            <h1 class="title">Cita Cancelada</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hola {{userName}},
+            </div>
+            
+            <p>Te informamos que tu cita ha sido <strong>cancelada</strong>. A continuación encontrarás los detalles:</p>
+            
+            <div class="appointment-details">
+                <div class="detail-row">
+                    <span class="detail-label">ID de Cita:</span>
+                    <span class="detail-value">{{appointmentId}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Servicio:</span>
+                    <span class="detail-value">{{serviceName}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Profesional:</span>
+                    <span class="detail-value">{{professionalName}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Fecha:</span>
+                    <span class="detail-value">{{scheduledDate}}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Hora:</span>
+                    <span class="detail-value">{{scheduledTime}}</span>
+                </div>
+            </div>
+            
+            <div class="reason-box">
+                <div class="reason-title">Motivo de la cancelación:</div>
+                <div>{{cancellationReason}}</div>
+            </div>
+            
+            <div class="info-box">
+                <p><strong>¿Qué sigue ahora?</strong></p>
+                <ul>
+                    <li>Si realizaste un pago, será reembolsado en los próximos 3-5 días hábiles</li>
+                    <li>Puedes agendar una nueva cita cuando gustes a través de nuestra plataforma</li>
+                    <li>Si tienes alguna pregunta, no dudes en contactarnos</li>
+                </ul>
+            </div>
+            
+            <p>Lamentamos cualquier inconveniente que esto pueda causar. Esperamos poder atenderte pronto.</p>
+        </div>
+        
+        <div class="footer">
+            <p>Gracias por confiar en nosotros.</p>
+            <div class="contact-info">
+                <p>¿Necesitas ayuda? Contáctanos:</p>
+                <p><a href="mailto:{{supportEmail}}" class="contact-link">{{supportEmail}}</a></p>
+                <p><a href="{{websiteUrl}}" class="contact-link">{{websiteUrl}}</a></p>
+            </div>
+            <p style="margin-top: 20px; font-size: 12px; color: #999;">
+                Este es un correo automático, por favor no respondas a este mensaje.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

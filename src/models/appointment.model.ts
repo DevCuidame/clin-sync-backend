@@ -53,8 +53,11 @@ export class Appointment {
   @Column({ type: 'text', nullable: true })
   cancellation_reason?: string;
 
-  @Column({ default: false })
-  reminder_sent?: boolean;
+  @Column({ default: true })
+  reminder_24h_sent?: boolean;
+
+  @Column({ default: true })
+  reminder_2h_sent?: boolean;
 
   @Column({ nullable: true, length: 255 })
   google_calendar_event_id?: string;
