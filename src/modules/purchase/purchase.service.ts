@@ -9,6 +9,7 @@ import { Service } from '../../models/service.model';
 import { UserSession, UserSessionStatus } from '../../models/user-session.model';
 import { PurchaseValidation } from './purchase.validation';
 import { TemporaryCustomer } from '../../models/temporary-customer.model';
+import { ServicePurchaseWithSessions } from './purchase-with-sessions.interface';
 import { 
   generateCashPaymentTransactionId, 
   generateServicePurchaseTransactionId, 
@@ -365,7 +366,7 @@ export class PurchaseService {
     return purchases.map(purchase => this.mapToResponseDto(purchase));
   }
 
-  async getServicePurchasesByUserId(userId: number): Promise<PurchaseResponseDto[]> {
+  async getServicePurchasesByUserId(userId: number): Promise<any[]> {
     const purchases = await this.purchaseRepository.find({
       where: { 
         user_id: userId,
@@ -376,7 +377,87 @@ export class PurchaseService {
       order: { purchase_date: 'DESC' }
     });
 
-    return purchases.map(purchase => this.mapToResponseDto(purchase));
+    // Para cada compra, obtener las sesiones y citas asociadas
+    const enrichedPurchases = await Promise.all(
+      purchases.map(async (purchase) => {
+        // Obtener sesiones de usuario para esta compra
+        const userSessions = await AppDataSource.getRepository('UserSession')
+          .createQueryBuilder('userSession')
+          .leftJoinAndSelect('userSession.purchase', 'purchase')
+          .leftJoinAndSelect('userSession.service', 'service')
+          .where('userSession.purchase_id = :purchaseId', { purchaseId: purchase.purchase_id })
+          .orderBy('userSession.created_at', 'DESC')
+          .getMany();
+
+        // Obtener citas para esta compra
+         const userAppointments = await AppDataSource.getRepository('Appointment')
+           .createQueryBuilder('appointment')
+           .leftJoinAndSelect('appointment.professional', 'professional')
+           .leftJoinAndSelect('professional.user', 'professionalUser')
+           .leftJoinAndSelect('appointment.user_session', 'user_session')
+           .where('appointment.user_id = :userId', { userId })
+           .andWhere('appointment.service_id = :serviceId', { serviceId: purchase.service_id })
+           .orderBy('appointment.scheduled_at', 'DESC')
+           .getMany();
+
+        // Mapear datos básicos de la compra
+        const basicPurchaseData = this.mapToResponseDto(purchase);
+
+        // Enriquecer con datos de sesiones
+        const enrichedSessions = userSessions.map(session => ({
+          user_session_id: session.user_session_id,
+          purchase_id: session.purchase_id,
+          service_id: session.service_id,
+          sessions_purchased: session.sessions_purchased,
+          sessions_remaining: session.sessions_remaining,
+          sessions_used: session.sessions_purchased - session.sessions_remaining,
+          status: session.status,
+          expires_at: session.expires_at,
+          created_at: session.created_at,
+          updated_at: session.updated_at,
+          purchase_info: {
+            amount_paid: Number(purchase.amount_paid),
+            purchase_date: purchase.purchase_date,
+            payment_status: purchase.payment_status,
+            purchase_type: purchase.purchase_type
+          }
+        }));
+
+        // Enriquecer con datos de citas
+        const enrichedAppointments = userAppointments.map(appointment => ({
+          appointment_id: appointment.appointment_id,
+          user_id: appointment.user_id,
+          professional_id: appointment.professional_id,
+          service_id: appointment.service_id,
+          scheduled_at: appointment.scheduled_at,
+          status: appointment.status,
+          amount: Number(appointment.amount || 0),
+          cancellation_reason: appointment.cancellation_reason,
+          user_session_id: appointment.user_session_id,
+          created_at: appointment.created_at,
+          professional: appointment.professional ? {
+            professional_id: appointment.professional.professional_id,
+            user_id: appointment.professional.user_id,
+            specialization: appointment.professional.specialization,
+            license_number: appointment.professional.license_number,
+            user: appointment.professional.user ? {
+              id: appointment.professional.user.id,
+              first_name: appointment.professional.user.first_name,
+              last_name: appointment.professional.user.last_name,
+              email: appointment.professional.user.email
+            } : null
+          } : null
+        }));
+
+        return {
+          ...basicPurchaseData,
+          sessions: enrichedSessions,
+          appointments: enrichedAppointments
+        };
+      })
+    );
+
+    return enrichedPurchases;
   }
 
   async updatePurchase(purchaseId: number, updateData: UpdatePurchaseDto): Promise<PurchaseResponseDto | null> {

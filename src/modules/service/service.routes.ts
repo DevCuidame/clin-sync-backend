@@ -6,12 +6,13 @@ import { restrictTo } from '../../middlewares/role.middleware';
 const router = Router();
 const serviceController = new ServiceController();
 
+router.use(authMiddleware);
 // Public routes
 router.get('/actives', (req, res) => serviceController.getServices(req, res));
 router.get('/:id', (req, res) => serviceController.getServiceById(req, res));
+router.get('/:id/complete', (req, res) => serviceController.getServiceByIdComplete(req, res));
 
 // Protected routes (require authentication)
-router.use(authMiddleware);
 router.use(restrictTo(['admin']));
 router.get('/', (req, res) => serviceController.getAllServices(req, res));
 router.post('/', authMiddleware, (req, res) => serviceController.createService(req, res));

@@ -108,6 +108,33 @@ export class ServiceController {
     }
   }
 
+  async getServiceByIdComplete(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const { id } = req.params;
+      const service = await this.serviceService.getServiceByIdComplete(parseInt(id), userId);
+      
+      if (!service) {
+        res.status(404).json({
+          success: false,
+          message: 'Service not found'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: service
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching service',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
   async updateService(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;

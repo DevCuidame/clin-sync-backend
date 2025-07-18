@@ -42,6 +42,7 @@ export class AppointmentService {
   }
 
   async createAppointment(data: CreateAppointmentDto): Promise<Appointment> {
+    console.log("🚀 ~ AppointmentService ~ createAppointment ~ data:", data)
     try {
       // Validar fecha
       const scheduledDate = createLocalDate(data.scheduled_at);
